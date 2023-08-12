@@ -11,6 +11,11 @@ const purchaseCommand = new SlashCommandBuilder()
 const holdingCommand = new SlashCommandBuilder()
     .setName('holding')
     .setDescription('View tokens currently held in wallet')
+    .addStringOption(option =>
+        option.setName('password')
+            .setDescription('Your wallets password')
+            .setRequired(true))
+
 
 const setupCommand = new SlashCommandBuilder()
     .setName('setup')

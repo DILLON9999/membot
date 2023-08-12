@@ -8,7 +8,8 @@ const {
 const { AlphaRouter, SwapType, SWAP_ROUTER_02_ADDRESSES } = require('@uniswap/smart-order-router');
 const { CurrencyAmount, TradeType, Percent, Token, ChainId } = require('@uniswap/sdk-core');
 const { UNIVERSAL_ROUTER_ADDRESS } = require('@uniswap/universal-router-sdk')
-const erc20Abi = require('../../abi.json')
+const erc20Abi = require('./abi.json')
+const wethAbi = require('./abi.json')
 
 const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, maxPriorityFeePerGas, gasLimit, sellDelta, walletSecret) => {
 
@@ -37,7 +38,7 @@ const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, ma
         );
 
         const ethersProvider = new ethers.providers.JsonRpcProvider(`https://mainnet.infura.io/v3/d25074e260984463be075e88db795106`);
-        const ethersSigner = new ethers.Wallet(walletSecret, getEthersProvider());
+        const ethersSigner = new ethers.Wallet(walletSecret, ethersProvider);
 
         async function approvePermit2Contract(erc20Address, amount) {
             const erc20 = new ethers.Contract(erc20Address, erc20Abi, ethersSigner);
@@ -98,8 +99,15 @@ const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, ma
             // NOTE: not handling native currency swaps here
             const sourceToken = sellToken;
             const destToken = WETH;
-            const amount = sellAmount;
 
+            // Determine percent of total to sell
+            const tokenContract = await new ethers.Contract(token.address, erc20Abi, ethersProvider)
+            const tokensHeld = ethers.utils.formatUnits(await tokenContract.balanceOf(userWallet), token.decimals)
+            const amount = tokensHeld * sellAmount
+
+            console.log("amount", amount)
+
+            // Convert percentage sale to WEI
             const amountInWei = ethers.utils.parseUnits(
                 amount.toString(),
                 sourceToken.decimals
@@ -144,22 +152,6 @@ const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, ma
                 uniswapRouterAddress
             );
             // console.log('nonce value:', nonce);
-
-            // create permit with SignatureTransfer
-            // const permit = {
-            //   permitted: {
-            //     token: sourceToken.address,
-            //     amount: amountInWei
-            //   },
-            //   spender: uniswapRouterAddress,
-            //   nonce,
-            //   deadline: expiry
-            // };
-            // const { domain, types, values } = SignatureTransfer.getPermitData(
-            //   permit,
-            //   PERMIT2_ADDRESS,
-            //   chainId
-            // );
 
             // create permit with AllowanceTransfer
             const permit = {
@@ -215,15 +207,37 @@ const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, ma
                 value: BigNumber.from(route.methodParameters.value),
                 from: userWallet,
                 gasPrice: route.gasPriceWei,
-                gasLimit: ethers.utils.hexlify(parseInt(gasLimit)), // in WEI
-                maxFeePerGas: parseInt(maxFeePerGas) * 1e9, // gwei to wei
-                maxPriorityFeePerGas: parseInt(maxPriorityFeePerGas) * 1e9 // gwei to wei
+                gasLimit: BigNumber.from('1000000')            
+                // gasLimit: ethers.utils.hexlify(parseInt(gasLimit)), // in WEI
+                // maxFeePerGas: parseInt(maxFeePerGas) * 1e9, // gwei to wei
+                // maxPriorityFeePerGas: parseInt(maxPriorityFeePerGas) * 1e9 // gwei to wei
             };
 
             // send out swap transaction
             const transaction = await ethersSigner.sendTransaction(txArguments);
+            await transaction.wait()
+
+            // Convert WETH to ETH
+            const wethContract = await new ethers.Contract(WETH.address, erc20Abi, ethersProvider)
+            const currentWeth = ethers.utils.formatUnits(await wethContract.balanceOf(walletAddress), 18)
+
+            if (currentWeth > 0) {
+
+                // WETH Contract Instance
+                const WETH_Contract = new ethers.Contract(WETH.address, wethAbi, ethersSigner);
+
+                // Unwrap WETH to ETH
+                const wethToSell = ethers.utils.parseEther(currentWeth)
+                const unwrapTx = await WETH_Contract.withdraw(wethToSell.toString());
+                await unwrapTx.wait();
+
+                console.log('ETH Balance:', ethers.utils.formatUnits(await ethersProvider.getBalance(walletAddress), 18))
+            } else {
+                console.log('No WETH Found')
+            }
+
             return transaction.hash
-            // console.log('swap transaction', transaction.hash);
+
         }
 
         const hash = await executeSwap();

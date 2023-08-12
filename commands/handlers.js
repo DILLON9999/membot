@@ -1,9 +1,12 @@
 const axios = require('axios');
 const { User } = require('../database/model');
 const { buy } = require('./trades/buy')
+const { ethers } = require('ethers');
 const { sell } = require('./trades/sell')
 const { client } = require('../install')
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const erc20Abi = require('./trades/abi.json')
+const ethersProvider = new ethers.providers.JsonRpcProvider(`https://mainnet.infura.io/v3/d25074e260984463be075e88db795106`);
 
 // Helper functions
 const { tokenData } = require('./helpers/tokenData')
@@ -14,6 +17,7 @@ const { heldTokenData } = require('./helpers/heldTokenData');
 const { ethButtons } = require('./components/ethButtons')
 const { holdingButtons } = require('./components/holdingButtons');
 const { purchaseModal } = require('./components/purchaseModal')
+const { sellModal } = require('./components/sellModal')
 
 const bcrypt = require('bcrypt');
 const saltRounds = 10;
@@ -84,7 +88,7 @@ const purchase = async (interaction) => {
 
         // Send transaction
         await submitConfirmation.update({ content: `Sending purchase for ${ethAmount} ETH`, components: [] });
-        const txRes = await buy(contract, user.walletAddress, user.defaultSlippage, ethAmount, user.maxFeePerGas, user.maxPriorityFeePerGas, user.gasLimit, user.buyDelta, walletSecret)
+        const txRes = await buy(contract, user.walletAddress, user.defaultSlippage, ethAmount, user.maxFeePerGas, user.maxPriorityFeePerGas, user.gasLimit, user.buyDelta, walletSecret, dataEmbed.saveData.decimals)
 
         // Return and send error if transaction not placed
         if (txRes == 'error') {
@@ -92,7 +96,8 @@ const purchase = async (interaction) => {
             return;
         }
 
-        submitConfirmation.editReply(`Trade placed: ${txRes}`);
+        await submitConfirmation.editReply(`Trade placed: ${txRes}`);
+        // await submitConfirmation.editReply({ content: `Trade Placed`, embeds: [] });
 
         // Send successful swap webhook
         await webhook(dataEmbed.saveData.name, dataEmbed.saveData.symbol, ethAmount, txRes)
@@ -109,12 +114,17 @@ const purchase = async (interaction) => {
     } catch (e) {
         console.log(e)
         await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
+        return
     }
 }
 
-const holdingUi = async (interaction, tokens, index) => {
+const holdingUi = async (interaction, tokens, index, userWallet) => {
 
-    const dataEmbed = await heldTokenData(tokens[index].address)
+    // Get amount of token currently held
+    const tokenContract = await new ethers.Contract(tokens[index].address, erc20Abi, ethersProvider)
+    const tokensHeld = ethers.utils.formatUnits(await tokenContract.balanceOf(userWallet), tokens[index].decimals)
+
+    const dataEmbed = await heldTokenData(tokens[index].address, Number(tokensHeld).toFixed(4))
 
     // Send data with purchase buttons
     const holdingResponse = await interaction.editReply({
@@ -127,26 +137,21 @@ const holdingUi = async (interaction, tokens, index) => {
     try {
 
         const holdingChoice = await holdingResponse.awaitMessageComponent({ filter: collectorFilter });
-        holdingChoice.deferUpdate()
-
+ 
         switch (holdingChoice.customId) {
             case 'prev':
-                // holdingChoice.deferUpdate()
-                return await holdingUi(interaction, tokens, index - 1)
-                break;
+                return await holdingUi(interaction, tokens, index - 1, userWallet)
             case 'next':
-                // holdingChoice.deferUpdate()
-                return await holdingUi(interaction, tokens, index + 1)
-                break;
+                return await holdingUi(interaction, tokens, index + 1, userWallet)
             case 'sellQuarter':
-                return { "percent": 25, "name": tokens[index].name }
+                return { "percent": 0.25, "token": tokens[index] }
             case 'sellHalf':
-                return { "percent": 50, "name": tokens[index].name }
+                return { "percent": 0.5, "token": tokens[index] }
             case 'sellThreeQuarters':
-                return { "percent": 75, "name": tokens[index].name }
+                return { "percent": 0.75, "token": tokens[index] }
             case 'sellFull':
-                return { "percent": 100, "name": tokens[index].name }
-        }
+                return { "percent": 1, "token": tokens[index] }
+        }        
 
     } catch (e) {
         await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
@@ -167,54 +172,29 @@ const holding = async (interaction) => {
     await interaction.reply("Checking Tokens...")
 
     // Initialize UI at the first index of held tokens
-    console.log(await holdingUi(interaction, user.tokens, 0))
+    const chosenToken = await holdingUi(interaction, user.tokens, 0, user.walletAddress)
+    console.log(chosenToken)
 
     // Clear buttons at bottom
     await interaction.editReply({ components: [] });
 
-
-    // USE RETURN { percent: 50, name: 'Membot' } TO PLACE SWAP FOR ETH
-
-    // View all tokens held by wallet
-    // Let user scroll through
-
-    // Choose percent (25, 50, 75, 100) of the amount held to sell
-    // Password modal popup
-    // Call sellToken function
-
-}
-
-const sellToken = async (interaction) => {
-
-    const user = await User.findOne({ discordId: interaction.user.id });
-
-    // Check if user has wallet
-    if (!user.walletAddress) {
-        interaction.reply('You haven\'t made a wallet yet. Use /setup to create one.');
-        return;
-    }
-
-    const token = {
-        address: "",
-        decimals: "",
-        symbol: "",
-        name: ""
-    }
-
-    const sellAmount = 0 // Calculte based off percent of held token user wants to sell
-
     // Decrypt wallet
     let walletSecret;
+    const password = interaction.options.getString('password');
     try {
         walletSecret = (await web3.eth.accounts.decrypt(user.encryptedPrivateKey, password)).privateKey
     } catch {
-        submitConfirmation.update({ content: 'Incorrect password', components: [] });
+        interaction.editReply({ content: 'Incorrect password', components: [] });
         return;
     }
 
+    const txRes = await sell(chosenToken.token, user.walletAddress, user.defaultSlippage, chosenToken.percent, user.maxFeePerGas, user.maxPriorityFeePerGas, user.gasLimit, user.buyDelta, walletSecret)
+    if (txRes == 'error') {
+        interaction.editReply("Error placing transaction")
+        return;
+    }
 
-    // token, userWallet, slipPercent, sellAmount, maxFeePerGas, maxPriorityFeePerGas, gasLimit, buyDelta, walletSecret
-    sell(token, user.walletAddress, user.defaultSlippage, sellAmount, user.maxFeePerGas, user.maxPriorityFeePerGas, user.gasLimit, user.sellDelta, walletSecret)
+    await interaction.editReply(`Trade placed: ${txRes}`);
 
 }
 
