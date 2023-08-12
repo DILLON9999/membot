@@ -1,14 +1,8 @@
 const axios = require('axios')
 
-const tokenData = async (address) => {
+const heldTokenData = async (address, amountHeld) => {
 
     let embed;
-    let saveData = {
-        "address": address,
-        "decimals": 18,
-        "symbol": "unknown",
-        "name": "unknown",
-    }
     let respCode;
 
     try {
@@ -26,29 +20,32 @@ const tokenData = async (address) => {
                 embed = [
                     {
                         "type": "rich",
-                        "title": `${data.name} (${data.symbol})`,
-                        "description": "",
+                        "title": `Holding: ${data.name}`,
+                        "description": `${amountHeld} ${data.symbol}`,
                         "color": 0x00FFFF,
                         "fields": [
-                            {
-                                "name": `Address`,
-                                "value": `[${data.address}](https://etherscan.io/token/${data.address})`
-                            },
                             {
                                 "name": `Total Supply`,
                                 "value": `\`${data.total_supply}\``
                             },
                             {
                                 "name": `Fully Diluted Value ($)`,
-                                "value": `\`${Math.round(parseFloat(data.fdv_usd) * 100) / 100}\``
+                                "value": `\`${Math.round(parseFloat(data.fdv_usd) * 100) / 100}\``,
+                                "inline": true
                             },
                             {
                                 "name": `Reserve ($)`,
-                                "value": `\`${Math.round(parseFloat(data.total_reserve_in_usd) * 100) / 100}\``
+                                "value": `\`${Math.round(parseFloat(data.total_reserve_in_usd) * 100) / 100}\``,
+                                "inline": true
+                            },
+                            {
+                                "name": ` `,
+                                "value": ` `
                             },
                             {
                                 "name": `24 Hour Volume ($)`,
-                                "value": `\`${Math.round(parseFloat(data.volume_usd.h24) * 100) / 100}\``
+                                "value": `\`${Math.round(parseFloat(data.volume_usd.h24) * 100) / 100}\``,
+                                "inline": true
                             },
                             {
                                 "name": `Market Cap ($)`,
@@ -57,13 +54,6 @@ const tokenData = async (address) => {
                         ]
                     }
                 ]
-
-                saveData = {
-                    "address": data.address,
-                    "decimals": data.decimals,
-                    "symbol": data.symbol,
-                    "name": data.name,
-                }
 
                 respCode = "success"
 
@@ -91,8 +81,8 @@ const tokenData = async (address) => {
         respCode = "error"
     }
 
-    return { respCode, embed, saveData }
+    return { respCode, embed }
 
 }
 
-module.exports = { tokenData };
+module.exports = { heldTokenData };

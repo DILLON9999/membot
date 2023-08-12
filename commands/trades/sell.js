@@ -30,8 +30,8 @@ const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, ma
         // REPLACE WITH SELL TOKEN //
         const sellToken = new Token(
             chainId,
-            token.contract,
-            token.digits, // update (18)
+            token.address,
+            token.decimals, // update (18)
             token.symbol, // update (UNI)
             token.name // update (Uniswap)
         );

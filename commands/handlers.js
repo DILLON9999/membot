@@ -5,8 +5,14 @@ const { sell } = require('./trades/sell')
 const { client } = require('../install')
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 
+// Helper functions
 const { tokenData } = require('./helpers/tokenData')
+const { webhook } = require('./helpers/webhook')
+const { heldTokenData } = require('./helpers/heldTokenData');
+
+// Command components
 const { ethButtons } = require('./components/ethButtons')
+const { holdingButtons } = require('./components/holdingButtons');
 const { purchaseModal } = require('./components/purchaseModal')
 
 const bcrypt = require('bcrypt');
@@ -34,13 +40,14 @@ const purchase = async (interaction) => {
 
     // Send data with purchase buttons
     const amountResponse = await interaction.reply({
-        embeds: dataEmbed,
+        embeds: dataEmbed.embed,
         components: [await ethButtons()]
     })
 
     const collectorFilter = i => i.user.id === interaction.user.id;
 
     try {
+
         const amountConfirmation = await amountResponse.awaitMessageComponent({ filter: collectorFilter, time: 60_000 });
 
         // Set default value for button chosen
@@ -78,7 +85,25 @@ const purchase = async (interaction) => {
         // Send transaction
         await submitConfirmation.update({ content: `Sending purchase for ${ethAmount} ETH`, components: [] });
         const txRes = await buy(contract, user.walletAddress, user.defaultSlippage, ethAmount, user.maxFeePerGas, user.maxPriorityFeePerGas, user.gasLimit, user.buyDelta, walletSecret)
-        txRes == 'error' ? submitConfirmation.editReply("Error placing transaction") : submitConfirmation.editReply(`Trade placed: ${txRes}`);
+
+        // Return and send error if transaction not placed
+        if (txRes == 'error') {
+            submitConfirmation.editReply("Error placing transaction")
+            return;
+        }
+
+        submitConfirmation.editReply(`Trade placed: ${txRes}`);
+
+        // Send successful swap webhook
+        await webhook(dataEmbed.saveData.name, dataEmbed.saveData.symbol, ethAmount, txRes)
+
+        // Add held token to users database
+        let addToken = true
+        for (let i = 0; i < user.tokens.length; i++) {
+            if (user.tokens[i].address == contract) { addToken = false }
+        }
+        if (addToken) { user.tokens.push(dataEmbed.saveData); await user.save() }
+
         return
 
     } catch (e) {
@@ -87,7 +112,68 @@ const purchase = async (interaction) => {
     }
 }
 
+const holdingUi = async (interaction, tokens, index) => {
+
+    const dataEmbed = await heldTokenData(tokens[index].address)
+
+    // Send data with purchase buttons
+    const holdingResponse = await interaction.editReply({
+        embeds: dataEmbed.embed,
+        components: await holdingButtons(tokens, index)
+    })
+
+    const collectorFilter = i => i.user.id === interaction.user.id;
+
+    try {
+
+        const holdingChoice = await holdingResponse.awaitMessageComponent({ filter: collectorFilter });
+        holdingChoice.deferUpdate()
+
+        switch (holdingChoice.customId) {
+            case 'prev':
+                // holdingChoice.deferUpdate()
+                return await holdingUi(interaction, tokens, index - 1)
+                break;
+            case 'next':
+                // holdingChoice.deferUpdate()
+                return await holdingUi(interaction, tokens, index + 1)
+                break;
+            case 'sellQuarter':
+                return { "percent": 25, "name": tokens[index].name }
+            case 'sellHalf':
+                return { "percent": 50, "name": tokens[index].name }
+            case 'sellThreeQuarters':
+                return { "percent": 75, "name": tokens[index].name }
+            case 'sellFull':
+                return { "percent": 100, "name": tokens[index].name }
+        }
+
+    } catch (e) {
+        await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
+        return
+    }
+}
+
 const holding = async (interaction) => {
+
+    const user = await User.findOne({ discordId: interaction.user.id });
+
+    if (!user.tokens || user.tokens.length == 0) {
+        await interaction.reply("You are not currently holding or tracking any tokens")
+        return
+    }
+
+    // Set reply to edit later
+    await interaction.reply("Checking Tokens...")
+
+    // Initialize UI at the first index of held tokens
+    console.log(await holdingUi(interaction, user.tokens, 0))
+
+    // Clear buttons at bottom
+    await interaction.editReply({ components: [] });
+
+
+    // USE RETURN { percent: 50, name: 'Membot' } TO PLACE SWAP FOR ETH
 
     // View all tokens held by wallet
     // Let user scroll through
@@ -109,8 +195,8 @@ const sellToken = async (interaction) => {
     }
 
     const token = {
-        contract: "",
-        digits: "",
+        address: "",
+        decimals: "",
         symbol: "",
         name: ""
     }
@@ -292,8 +378,6 @@ const changeSettings = async (interaction) => {
 
 const updateSettings = async (interaction) => {
 
-    console.log('test')
-
     const maxFeePerGasInput = interaction.fields.getTextInputValue('maxFeePerGasInput');
     const maxPriorityFeePerGasInput = interaction.fields.getTextInputValue('maxPriorityFeePerGasInput');
     const gasLimitInput = interaction.fields.getTextInputValue('gasLimitInput');
@@ -336,4 +420,4 @@ const exportPrivateKey = async (interaction) => {
 
 }
 
-module.exports = { purchase, setup, passwordSubmit, settings, changeSettings, updateSettings, exportPrivateKey };
+module.exports = { purchase, setup, holding, passwordSubmit, settings, changeSettings, updateSettings, exportPrivateKey };

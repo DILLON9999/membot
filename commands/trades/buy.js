@@ -105,7 +105,7 @@ const buy = async (contract, userWallet, slipPercent, ethAmount, maxFeePerGas, m
             fee: 3000,
             recipient: userWallet,
             deadline: Math.floor(Date.now() / 1000 + 1800),
-            slippageTolerance: new Percent(parseInt(slipPercent), 100),
+            slippageTolerance: new Percent(10, 100),
             amountIn: inputAmount,
             amountOutMinimum: 0,
             sqrtPriceLimitX96: 0
@@ -118,9 +118,11 @@ const buy = async (contract, userWallet, slipPercent, ethAmount, maxFeePerGas, m
             from: userWallet,
             data: data,
             value: inputAmount,
-            gasLimit: ethers.utils.hexlify(parseInt(gasLimit)), // in WEI
-            maxFeePerGas: parseInt(maxFeePerGas) * 1e9, // gwei to wei
-            maxPriorityFeePerGas: parseInt(maxPriorityFeePerGas) * 1e9 // gwei to wei
+            gasLimit: ethers.utils.hexlify(400000)
+
+            // gasLimit: ethers.utils.hexlify(parseInt(gasLimit)), // in WEI
+            // maxFeePerGas: parseInt(maxFeePerGas) * 1e9, // gwei to wei
+            // maxPriorityFeePerGas: parseInt(maxPriorityFeePerGas) * 1e9 // gwei to wei
         }
 
         const txRes = await signer.sendTransaction(txArgs)
