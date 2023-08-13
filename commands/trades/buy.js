@@ -55,7 +55,6 @@ const buy = async (token, userWallet, slipPercent, amount, maxFeePerGas, maxPrio
         async function approvePermit2Contract(erc20Address, amount) {
             const erc20 = new ethers.Contract(erc20Address, erc20Abi, ethersSigner);
             const approveTx = await erc20.approve(PERMIT2_ADDRESS, amount);
-            console.log('approve tx hash:', approveTx.hash);
             await approveTx.wait();
         }
 
@@ -108,11 +107,9 @@ const buy = async (token, userWallet, slipPercent, amount, maxFeePerGas, maxPrio
                 PERMIT2_ADDRESS
             );
 
-            console.log('allowance:', ethers.utils.formatEther(allowance));  
-
             // if allowance too low, up it
-            if (ethers.utils.formatEther(allowance) == 0 || ethers.utils.formatEther(allowance) < amountInWei) {
-                console.log('Approving Token For Sale')
+            if (BigInt(allowance._hex) == 0 || BigInt(allowance._hex) < BigInt(amountInWei._hex)) {
+                console.log('Allowance Limited, Increasing...')
                 await approvePermit2Contract(
                     sourceToken.address,
                     ethers.constants.MaxUint256 // APPROVE MAX AMOUNT
@@ -186,13 +183,14 @@ const buy = async (token, userWallet, slipPercent, amount, maxFeePerGas, maxPrio
             // send out swap transaction
             const transaction = await ethersSigner.sendTransaction(txArguments);
             await transaction.wait()
+            console.log('TX Hash:', transaction.hash)
             const endTokenAmount = ethers.utils.formatUnits(await tokenContract.balanceOf(userWallet), token.decimals)
 
             // Max approve new purchased token for later
-            console.log('Max Approving New Token')
             await approvePermit2Contract(token.address, ethers.constants.MaxUint256) // APPROVE MAX AMOUNT
 
             return {
+                resp: "success",
                 hash: transaction.hash,
                 spent: amount,
                 recieved: endTokenAmount - startTokenAmount
@@ -204,8 +202,12 @@ const buy = async (token, userWallet, slipPercent, amount, maxFeePerGas, maxPrio
         return hash
 
     } catch (e) {
-        console.log(e)
-        return "error"
+        if (e.reason) {
+            return { resp: "error", reason: e.reason }
+        } else {
+            console.log(e)
+            return { resp: "error", reason: "Error placing transaction" }
+        }
     }
 
 }

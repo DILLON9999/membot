@@ -34,29 +34,29 @@ const web3 = new Web3(`https://mainnet.infura.io/v3/${infuraApiKey}`);
 
 // ** Buy and Sell ** //
 
-const purchase = async (interaction) => {
-
-    const user = await User.findOne({ discordId: interaction.user.id });
-
-    // Check if user has wallet
-    if (!user) {
-        interaction.reply('You haven\'t made a wallet yet. Use /setup to create one.');
-        return;
-    }
-
-    // Pull token data
-    const contract = interaction.options.getString('contract');
-    const dataEmbed = await tokenData(contract)
-
-    // Send data with purchase buttons
-    const amountResponse = await interaction.reply({
-        embeds: dataEmbed.embed,
-        components: [await ethButtons()]
-    })
-
-    const collectorFilter = i => i.user.id === interaction.user.id;
+const purchase = async (interaction, contract) => {
 
     try {
+
+        const user = await User.findOne({ discordId: interaction.user.id });
+
+        // Check if user has wallet
+        if (!user) {
+            interaction.reply('You haven\'t made a wallet yet. Use /setup to create one.');
+            return;
+        }
+
+        // Pull token data
+        // const contract = interaction.options.getString('contract');
+        const dataEmbed = await tokenData(contract)
+
+        // Send data with purchase buttons
+        const amountResponse = await interaction.reply({
+            embeds: dataEmbed.embed,
+            components: [await ethButtons()]
+        })
+
+        const collectorFilter = i => i.user.id === interaction.user.id;
 
         const amountConfirmation = await amountResponse.awaitMessageComponent({ filter: collectorFilter, time: 60_000 });
 
@@ -79,7 +79,7 @@ const purchase = async (interaction) => {
 
         // Wait for modal to be submitted
         await amountConfirmation.showModal(await purchaseModal(defaultValue));
-        const submitConfirmation = await amountConfirmation.awaitModalSubmit({ filter: collectorFilter });
+        const submitConfirmation = await amountConfirmation.awaitModalSubmit({ filter: collectorFilter, time: 120_000 });
         const password = submitConfirmation.fields.getTextInputValue('purchasePassword');
         const ethAmount = submitConfirmation.fields.getTextInputValue('ethInput')
 
@@ -93,18 +93,18 @@ const purchase = async (interaction) => {
         }
 
         // Send transaction
-        await submitConfirmation.update({ content: `Sending purchase for ${ethAmount} ETH`, components: [] });
+        await submitConfirmation.reply({ content: `Sending purchase for ${ethAmount} ETH`, components: [] });
         // const txRes = await buy(contract, user.walletAddress, user.defaultSlippage, ethAmount, user.maxFeePerGas, user.maxPriorityFeePerGas, user.gasLimit, user.buyDelta, walletSecret, dataEmbed.saveData.decimals)
         const txRes = await buy(dataEmbed.saveData, user.walletAddress, user.defaultSlippage, ethAmount, user.maxFeePerGas, user.maxPriorityFeePerGas, user.gasLimit, user.buyDelta, walletSecret)
 
         // Return and send error if transaction not placed
-        if (txRes == 'error') {
-            await submitConfirmation.editReply({ content: 'Error placing transaction', embeds: [] });
+        if (txRes.resp == 'error') {
+            await submitConfirmation.followUp({ content: `Error: ${txRes.reason}`, embeds: [] });
             return;
         }
 
         // Show successful embed message
-        await submitConfirmation.editReply({ content: '', embeds: await swapResponse(txRes, dataEmbed.saveData.symbol, 'ETH') });
+        await submitConfirmation.update({ content: '', embeds: await swapResponse(txRes, dataEmbed.saveData.symbol, 'ETH') });
 
         // Send successful swap webhook
         await webhook(txRes, dataEmbed.saveData.symbol, 'ETH')
@@ -121,8 +121,8 @@ const purchase = async (interaction) => {
     } catch (e) {
         if (!e.code == 'InteractionCollectorError') {
             console.log(e)
-        } 
-        await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
+        }
+        // await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
         return
     }
 }
@@ -147,6 +147,18 @@ const holdingUi = async (interaction, tokens, index, userWallet) => {
 
         const holdingChoice = await holdingResponse.awaitMessageComponent({ filter: collectorFilter });
 
+        // Get password from popup modal if sell is selected
+        let password;
+        if (holdingChoice.customId !== 'prev' && holdingChoice.customId !== 'next') {
+            await holdingChoice.showModal(await sellModal());
+            await holdingChoice.awaitModalSubmit({ filter: collectorFilter, time: 120_000 })
+                .then(async (sellPasswordModal) => { // sellPasswordModal is correctly passed here.
+                    password = await sellPasswordModal.fields.getTextInputValue('sellPassword');
+                    sellPasswordModal.deferUpdate()
+                })
+                .catch(err => console.log(err));
+        }
+
         switch (holdingChoice.customId) {
             case 'prev':
                 holdingChoice.deferUpdate()
@@ -155,19 +167,20 @@ const holdingUi = async (interaction, tokens, index, userWallet) => {
                 holdingChoice.deferUpdate()
                 return await holdingUi(interaction, tokens, index + 1, userWallet)
             case 'sellQuarter':
-                return { "percent": 0.25, "token": tokens[index] }
+                return { "percent": 0.25, "token": tokens[index], "password": password }
             case 'sellHalf':
-                return { "percent": 0.5, "token": tokens[index] }
+                return { "percent": 0.5, "token": tokens[index], "password": password }
             case 'sellThreeQuarters':
-                return { "percent": 0.75, "token": tokens[index] }
+                return { "percent": 0.75, "token": tokens[index], "password": password }
             case 'sellFull':
-                return { "percent": 1, "token": tokens[index] }
+                return { "percent": 1, "token": tokens[index], "password": password }
         }
 
     } catch (e) {
+        console.log(e)
         if (!e.code == 'InteractionCollectorError') {
             console.log(e)
-        } 
+        }
         await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
         return
     }
@@ -199,17 +212,16 @@ const holding = async (interaction) => {
 
         // Decrypt wallet
         let walletSecret;
-        const password = interaction.options.getString('password');
         try {
-            walletSecret = (await web3.eth.accounts.decrypt(user.encryptedPrivateKey, password)).privateKey
+            walletSecret = (await web3.eth.accounts.decrypt(user.encryptedPrivateKey, chosenToken.password)).privateKey
         } catch {
-            interaction.editReply({ content: 'Incorrect password', components: [] });
+            interaction.editReply({ content: 'Incorrect password', embeds: [], components: [] });
             return;
         }
 
         const txRes = await sell(chosenToken.token, user.walletAddress, user.defaultSlippage, chosenToken.percent, user.maxFeePerGas, user.maxPriorityFeePerGas, user.gasLimit, user.sellDelta, walletSecret)
-        if (txRes == 'error') {
-            await interaction.editReply({ content: 'Error placing transaction', embeds: [] });
+        if (txRes.resp == 'error') {
+            await submitConfirmation.editReply({ content: `Error: ${txRes.reason}`, embeds: [] });
             return;
         }
 
@@ -509,11 +521,11 @@ const getWallet = async (interaction) => {
             await submitConfirmation.editReply({ content: 'Error placing transaction', embeds: [], components: [] });
             return;
         }
-        
+
     } catch (e) {
         if (!e.code == 'InteractionCollectorError') {
             console.log(e)
-        } 
+        }
         await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
         return
     }

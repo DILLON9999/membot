@@ -1,5 +1,6 @@
 const { installCommands, registerInteractions, client } = require('./install');
 const connectToDatabase = require('./database/database');
+const { purchase, setup, holding, passwordSubmit, settings, changeSettings, updateSettings, exportPrivateKey, getWallet } = require('./commands/handlers');
 
 connectToDatabase();
 client.on('ready', async () => {
@@ -7,6 +8,15 @@ client.on('ready', async () => {
     installCommands();
     registerInteractions();
 });
+
+client.on('messageCreate', async message => {
+    if(message.content.startsWith('0x') && (message.content.split(' ')).length == 1){
+        message["user"] = {"id": message.author.id}
+        await purchase(message, message.content)
+        // await purchase(message);
+    }
+});
+
 
 client.login('MTEzOTY4MzMxNzMwNjg4ODE5Mw.Grljf1.J0LvZdZiEInMsbiS62QlxUKwH7_yHif6rwC2xs');
 // MTEzODI3MTYyNDY2ODM4NTM4MQ.G_0BsQ.Y5ip6NjbklXz5AcJWR0ggMaKkZ6FnePS0_XyBw

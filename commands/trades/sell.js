@@ -105,11 +105,9 @@ const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, ma
                 PERMIT2_ADDRESS
             );
 
-            console.log('allowance:', ethers.utils.formatEther(allowance));  
-
             // if allowance too low, up it
-            if (ethers.utils.formatEther(allowance) == 0 || ethers.utils.formatEther(allowance) < amountInWei) {
-                console.log('Approving Token For Sale')
+            if (BigInt(allowance._hex) == 0 || BigInt(allowance._hex) < BigInt(amountInWei._hex)) {
+                console.log('Allowance Limited, Increasing...')
                 await approvePermit2Contract(
                     sourceToken.address,
                     ethers.constants.MaxUint256 // APPROVE MAX AMOUNT
@@ -196,8 +194,12 @@ const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, ma
         return hash
 
     } catch (e) {
-        console.log(e)
-        return "error"
+        if (e.reason) {
+            return { resp: "error", reason: e.reason }
+        } else {
+            console.log(e)
+            return { resp: "error", reason: "Error placing transaction" }
+        }
     }
 
 }

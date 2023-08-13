@@ -36,7 +36,7 @@ const tokenData = async (address) => {
                             },
                             {
                                 "name": `Total Supply`,
-                                "value": `\`${data.total_supply}\``
+                                "value": `\`${data.total_supply.slice(0, -(data.decimals+2))}\``
                             },
                             {
                                 "name": `Fully Diluted Value ($)`,

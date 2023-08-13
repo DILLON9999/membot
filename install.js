@@ -25,7 +25,7 @@ const registerInteractions = () => {
         if (interaction.commandName == 'ping') {
             pingInteraction(interaction);
         } else if (interaction.commandName == 'buy') {
-            await purchase(interaction);
+            await purchase(interaction, interaction.options.getString('contract'));
         } else if (interaction.commandName == 'setup') {
             await setup(interaction)
         } else if (interaction.commandName == 'holding') {
