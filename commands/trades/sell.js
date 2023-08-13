@@ -41,7 +41,7 @@ const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, ma
         const ethersSigner = new ethers.Wallet(walletSecret, ethersProvider);
 
         // pull amount of token user is currently holding
-        const startEth = ethers.utils.formatUnits(await ethersProvider.getBalance(userWallet), 18)
+        let ethRecieved;
 
         async function approvePermit2Contract(erc20Address, amount) {
             const erc20 = new ethers.Contract(erc20Address, erc20Abi, ethersSigner);
@@ -77,7 +77,7 @@ const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, ma
                     }
                 }
             );
-            console.log(`Quote Exact In: ${route.quote.toFixed(10)}`);
+            ethRecieved = route.quote.toFixed(4)
             return route;
         }
 
@@ -184,13 +184,10 @@ const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, ma
             const transaction = await ethersSigner.sendTransaction(txArguments);
             await transaction.wait()
 
-            // Current WETH (Calculate ETH Sold)
-            const currentEth = ethers.utils.formatUnits(await ethersProvider.getBalance(userWallet), 18)
-
             return {
                 hash: transaction.hash,
                 spent: amount,
-                recieved: currentEth - startEth
+                recieved: ethRecieved
             }
 
         }

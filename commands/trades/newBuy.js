@@ -85,7 +85,7 @@ const newBuy = async (token, userWallet, slipPercent, amount, maxFeePerGas, maxP
                     }
                 }
             );
-            console.log(`Quote Exact In: ${route.quote.toFixed(10)}`);
+            // console.log(`Quote Exact In: ${route.quote.toFixed(10)}`);
             return route;
         }
 

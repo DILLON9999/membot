@@ -80,7 +80,7 @@ const purchase = async (interaction) => {
 
         // Wait for modal to be submitted
         await amountConfirmation.showModal(await purchaseModal(defaultValue));
-        const submitConfirmation = await amountConfirmation.awaitModalSubmit({ filter: collectorFilter, time: 120_000 });
+        const submitConfirmation = await amountConfirmation.awaitModalSubmit({ filter: collectorFilter });
         const password = submitConfirmation.fields.getTextInputValue('purchasePassword');
         const ethAmount = submitConfirmation.fields.getTextInputValue('ethInput')
 
@@ -120,7 +120,9 @@ const purchase = async (interaction) => {
         return
 
     } catch (e) {
-        console.log(e)
+        if (!e.code == 'InteractionCollectorError') {
+            console.log(e)
+        } 
         await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
         return
     }
@@ -164,6 +166,9 @@ const holdingUi = async (interaction, tokens, index, userWallet) => {
         }
 
     } catch (e) {
+        if (!e.code == 'InteractionCollectorError') {
+            console.log(e)
+        } 
         await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
         return
     }
@@ -507,8 +512,11 @@ const getWallet = async (interaction) => {
         }
         
     } catch (e) {
-        console.log(e)
+        if (!e.code == 'InteractionCollectorError') {
+            console.log(e)
+        } 
         await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
+        return
     }
 
 
