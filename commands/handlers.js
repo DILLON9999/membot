@@ -1,8 +1,7 @@
 const axios = require('axios');
 const { User } = require('../database/model');
-const { buy } = require('./trades/buy')
 const { ethers } = require('ethers');
-const { sell } = require('./trades/sell')
+
 const { client } = require('../install')
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const erc20Abi = require('./trades/abi.json')
@@ -12,12 +11,20 @@ const ethersProvider = new ethers.providers.JsonRpcProvider(`https://mainnet.inf
 const { tokenData } = require('./helpers/tokenData')
 const { webhook } = require('./helpers/webhook')
 const { heldTokenData } = require('./helpers/heldTokenData');
+const { swapResponse } = require('./helpers/swapResponse')
 
 // Command components
 const { ethButtons } = require('./components/ethButtons')
 const { holdingButtons } = require('./components/holdingButtons');
 const { purchaseModal } = require('./components/purchaseModal')
 const { sellModal } = require('./components/sellModal')
+const { withdrawModal } = require('./components/withdrawModal')
+
+// Trade functions
+const { sell } = require('./trades/sell')
+const { buy } = require('./trades/buy')
+const { newBuy } = require('./trades/newBuy')
+
 
 const bcrypt = require('bcrypt');
 const saltRounds = 10;
@@ -33,7 +40,7 @@ const purchase = async (interaction) => {
     const user = await User.findOne({ discordId: interaction.user.id });
 
     // Check if user has wallet
-    if (!user.walletAddress) {
+    if (!user) {
         interaction.reply('You haven\'t made a wallet yet. Use /setup to create one.');
         return;
     }
@@ -88,19 +95,20 @@ const purchase = async (interaction) => {
 
         // Send transaction
         await submitConfirmation.update({ content: `Sending purchase for ${ethAmount} ETH`, components: [] });
-        const txRes = await buy(contract, user.walletAddress, user.defaultSlippage, ethAmount, user.maxFeePerGas, user.maxPriorityFeePerGas, user.gasLimit, user.buyDelta, walletSecret, dataEmbed.saveData.decimals)
+        // const txRes = await buy(contract, user.walletAddress, user.defaultSlippage, ethAmount, user.maxFeePerGas, user.maxPriorityFeePerGas, user.gasLimit, user.buyDelta, walletSecret, dataEmbed.saveData.decimals)
+        const txRes = await newBuy(dataEmbed.saveData, user.walletAddress, user.defaultSlippage, ethAmount, user.maxFeePerGas, user.maxPriorityFeePerGas, user.gasLimit, user.buyDelta, walletSecret)
 
         // Return and send error if transaction not placed
         if (txRes == 'error') {
-            submitConfirmation.editReply("Error placing transaction")
+            await submitConfirmation.editReply({ content: 'Error placing transaction', embeds: [] });
             return;
         }
 
-        await submitConfirmation.editReply(`Trade placed: ${txRes}`);
-        // await submitConfirmation.editReply({ content: `Trade Placed`, embeds: [] });
+        // Show successful embed message
+        await submitConfirmation.editReply({ content: '', embeds: await swapResponse(txRes, dataEmbed.saveData.symbol, 'ETH') });
 
         // Send successful swap webhook
-        await webhook(dataEmbed.saveData.name, dataEmbed.saveData.symbol, ethAmount, txRes)
+        await webhook(txRes, dataEmbed.saveData.symbol, 'ETH')
 
         // Add held token to users database
         let addToken = true
@@ -137,11 +145,13 @@ const holdingUi = async (interaction, tokens, index, userWallet) => {
     try {
 
         const holdingChoice = await holdingResponse.awaitMessageComponent({ filter: collectorFilter });
- 
+
         switch (holdingChoice.customId) {
             case 'prev':
+                holdingChoice.deferUpdate()
                 return await holdingUi(interaction, tokens, index - 1, userWallet)
             case 'next':
+                holdingChoice.deferUpdate()
                 return await holdingUi(interaction, tokens, index + 1, userWallet)
             case 'sellQuarter':
                 return { "percent": 0.25, "token": tokens[index] }
@@ -151,7 +161,7 @@ const holdingUi = async (interaction, tokens, index, userWallet) => {
                 return { "percent": 0.75, "token": tokens[index] }
             case 'sellFull':
                 return { "percent": 1, "token": tokens[index] }
-        }        
+        }
 
     } catch (e) {
         await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
@@ -161,40 +171,51 @@ const holdingUi = async (interaction, tokens, index, userWallet) => {
 
 const holding = async (interaction) => {
 
-    const user = await User.findOne({ discordId: interaction.user.id });
+    try {
+        const user = await User.findOne({ discordId: interaction.user.id });
 
-    if (!user.tokens || user.tokens.length == 0) {
-        await interaction.reply("You are not currently holding or tracking any tokens")
+        if (!user) {
+            interaction.reply('You haven\'t made a wallet yet. Use /setup to create one.');
+            return;
+        }
+
+        if (!user.tokens || user.tokens.length == 0) {
+            await interaction.reply("You are not currently holding or tracking any tokens")
+            return
+        }
+
+        // Set reply to edit later
+        await interaction.reply("Checking Tokens...")
+
+        // Initialize UI at the first index of held tokens
+        const chosenToken = await holdingUi(interaction, user.tokens, 0, user.walletAddress)
+
+        // Clear buttons at bottom
+        await interaction.editReply({ components: [] });
+
+        // Decrypt wallet
+        let walletSecret;
+        const password = interaction.options.getString('password');
+        try {
+            walletSecret = (await web3.eth.accounts.decrypt(user.encryptedPrivateKey, password)).privateKey
+        } catch {
+            interaction.editReply({ content: 'Incorrect password', components: [] });
+            return;
+        }
+
+        const txRes = await sell(chosenToken.token, user.walletAddress, user.defaultSlippage, chosenToken.percent, user.maxFeePerGas, user.maxPriorityFeePerGas, user.gasLimit, user.sellDelta, walletSecret)
+        if (txRes == 'error') {
+            await interaction.editReply({ content: 'Error placing transaction', embeds: [] });
+            return;
+        }
+
+        await interaction.editReply({ content: '', embeds: await swapResponse(txRes, 'ETH', chosenToken.token.symbol) });
+        await webhook(txRes, 'ETH', chosenToken.token.symbol)
+
+    } catch (e) {
+        console.log(e)
         return
     }
-
-    // Set reply to edit later
-    await interaction.reply("Checking Tokens...")
-
-    // Initialize UI at the first index of held tokens
-    const chosenToken = await holdingUi(interaction, user.tokens, 0, user.walletAddress)
-    console.log(chosenToken)
-
-    // Clear buttons at bottom
-    await interaction.editReply({ components: [] });
-
-    // Decrypt wallet
-    let walletSecret;
-    const password = interaction.options.getString('password');
-    try {
-        walletSecret = (await web3.eth.accounts.decrypt(user.encryptedPrivateKey, password)).privateKey
-    } catch {
-        interaction.editReply({ content: 'Incorrect password', components: [] });
-        return;
-    }
-
-    const txRes = await sell(chosenToken.token, user.walletAddress, user.defaultSlippage, chosenToken.percent, user.maxFeePerGas, user.maxPriorityFeePerGas, user.gasLimit, user.buyDelta, walletSecret)
-    if (txRes == 'error') {
-        interaction.editReply("Error placing transaction")
-        return;
-    }
-
-    await interaction.editReply(`Trade placed: ${txRes}`);
 
 }
 
@@ -258,6 +279,10 @@ const passwordSubmit = async (interaction) => {
 const settings = async (interaction) => {
 
     let user = await User.findOne({ discordId: interaction.user.id });
+    if (!user) {
+        interaction.reply('You haven\'t made a wallet yet. Use /setup to create one.');
+        return;
+    }
 
     const embed = [
         {
@@ -358,13 +383,18 @@ const changeSettings = async (interaction) => {
 
 const updateSettings = async (interaction) => {
 
+    let user = await User.findOne({ discordId: interaction.user.id });
+
+    if (!user) {
+        interaction.reply('You haven\'t made a wallet yet. Use /setup to create one.');
+        return;
+    }
+
     const maxFeePerGasInput = interaction.fields.getTextInputValue('maxFeePerGasInput');
     const maxPriorityFeePerGasInput = interaction.fields.getTextInputValue('maxPriorityFeePerGasInput');
     const gasLimitInput = interaction.fields.getTextInputValue('gasLimitInput');
     const buyDeltaInput = interaction.fields.getTextInputValue('buyDeltaInput');
     const sellDeltaInput = interaction.fields.getTextInputValue('sellDeltaInput');
-
-    let user = await User.findOne({ discordId: interaction.user.id });
 
     if (maxFeePerGasInput) { user.maxFeePerGas = maxFeePerGasInput }
     if (maxPriorityFeePerGasInput) { user.maxPriorityFeePerGas = maxPriorityFeePerGasInput }
@@ -382,7 +412,7 @@ const exportPrivateKey = async (interaction) => {
 
     const user = await User.findOne({ discordId: interaction.user.id });
 
-    if (!user.walletAddress) {
+    if (!user) {
         interaction.reply('You haven\'t made a wallet yet. Use /setup to create one.');
         return;
     }
@@ -391,7 +421,7 @@ const exportPrivateKey = async (interaction) => {
 
     try {
         walletSecret = (await web3.eth.accounts.decrypt(user.encryptedPrivateKey, password)).privateKey
-        interaction.reply(`Private Key: \`${walletSecret}\``)
+        interaction.reply({ content: `Private Key: \`${walletSecret}\``, ephemeral: true });
         return;
     } catch {
         interaction.reply('Incorrect password.')
@@ -400,4 +430,88 @@ const exportPrivateKey = async (interaction) => {
 
 }
 
-module.exports = { purchase, setup, holding, passwordSubmit, settings, changeSettings, updateSettings, exportPrivateKey };
+const getWallet = async (interaction) => {
+
+    const user = await User.findOne({ discordId: interaction.user.id });
+
+    if (!user) {
+        interaction.reply('You haven\'t made a wallet yet. Use /setup to create one.');
+        return;
+    }
+
+    const walletEmbed = [
+        {
+            "type": "rich",
+            "title": "",
+            "description": "",
+            "color": 0x00FFFF,
+            "fields": [
+                {
+                    "name": `Wallet Address`,
+                    "value": `\`${user.walletAddress}\``
+                },
+                {
+                    "name": `Balance`,
+                    "value": `\`${Number(ethers.utils.formatUnits(await ethersProvider.getBalance(user.walletAddress), 18)).toFixed(4)} ETH\``
+                }
+            ]
+        }
+    ]
+
+    const withdrawButton = new ButtonBuilder()
+        .setCustomId('withdraw')
+        .setLabel('Withdraw')
+        .setStyle(ButtonStyle.Secondary);
+
+    const row = new ActionRowBuilder()
+        .addComponents(withdrawButton);
+
+    const resp = await interaction.reply({ embeds: walletEmbed, components: [row] })
+
+    const collectorFilter = i => i.user.id === interaction.user.id;
+
+    try {
+        const confirmation = await resp.awaitMessageComponent({ filter: collectorFilter, time: 60000 });
+        // Wait for modal to be submitted
+        await confirmation.showModal(await withdrawModal());
+        const submitConfirmation = await confirmation.awaitModalSubmit({ filter: collectorFilter, time: 120_000 });
+        // Modal inputs
+        const ethInput = submitConfirmation.fields.getTextInputValue('ethInput');
+        const withdrawWallet = submitConfirmation.fields.getTextInputValue('withdrawWallet')
+        const withdrawPassword = submitConfirmation.fields.getTextInputValue('withdrawPassword')
+        await submitConfirmation.update({ content: `Withdrawing...`, embeds: [], components: [] });
+
+        // Decrypt wallet
+        let walletSecret;
+        try {
+            walletSecret = (await web3.eth.accounts.decrypt(user.encryptedPrivateKey, withdrawPassword)).privateKey
+        } catch {
+            submitConfirmation.editReply({ content: 'Incorrect password', components: [] });
+            return;
+        }
+
+        // Send a transaction
+        const wallet = new ethers.Wallet(walletSecret, ethersProvider)
+        const txArgs = {
+            to: withdrawWallet,
+            value: ethers.utils.parseEther(ethInput)
+        }
+
+        // Handle transaction resp
+        try {
+            const txRes = await wallet.sendTransaction(txArgs)
+            await submitConfirmation.editReply({ content: `${ethInput} ETH Withdraw: [${txRes.hash}](https://etherscan.io/tx/${txRes.hash}) `, embeds: [], components: [] });
+        } catch (e) {
+            await submitConfirmation.editReply({ content: 'Error placing transaction', embeds: [], components: [] });
+            return;
+        }
+        
+    } catch (e) {
+        console.log(e)
+        await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
+    }
+
+
+}
+
+module.exports = { purchase, setup, holding, passwordSubmit, settings, changeSettings, updateSettings, exportPrivateKey, getWallet };

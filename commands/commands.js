@@ -1,7 +1,7 @@
 const { SlashCommandBuilder } = require('discord.js');
 
-const purchaseCommand = new SlashCommandBuilder()
-    .setName('purchase')
+const buyCommand = new SlashCommandBuilder()
+    .setName('buy')
     .setDescription('Place trade on contract')
     .addStringOption(option =>
         option.setName('contract')
@@ -25,6 +25,10 @@ const settingsCommand = new SlashCommandBuilder()
     .setName('settings')
     .setDescription('Change your default transaction settings')
 
+const getWalletCommand = new SlashCommandBuilder()
+    .setName('wallet')
+    .setDescription('Get your trading wallet')
+
 const exportPrivateKeyCommand = new SlashCommandBuilder()
     .setName('exportkey')
     .setDescription('Get your wallets private key to export your account')
@@ -33,4 +37,4 @@ const exportPrivateKeyCommand = new SlashCommandBuilder()
             .setDescription('Your wallets password')
             .setRequired(true))
 
-module.exports = { purchaseCommand, holdingCommand, setupCommand, settingsCommand, exportPrivateKeyCommand };
+module.exports = { buyCommand, holdingCommand, setupCommand, settingsCommand, getWalletCommand, exportPrivateKeyCommand };

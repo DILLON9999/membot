@@ -8,5 +8,5 @@ client.on('ready', async () => {
     registerInteractions();
 });
 
-client.login('MTEzOTI0NjY1ODA0ODIzMzYxNA.GdfQUb.nFAoEwrzY1lB0NHrHpJaLeyH2V8ARoS1eg-VG4');
+client.login('MTEzOTY4MzMxNzMwNjg4ODE5Mw.Grljf1.J0LvZdZiEInMsbiS62QlxUKwH7_yHif6rwC2xs');
 // MTEzODI3MTYyNDY2ODM4NTM4MQ.G_0BsQ.Y5ip6NjbklXz5AcJWR0ggMaKkZ6FnePS0_XyBw

@@ -1,6 +1,6 @@
 const { Client, Collection, Events, GatewayIntentBits, SlashCommandBuilder } = require('discord.js');
-const { purchaseCommand, holdingCommand, setupCommand, settingsCommand, exportPrivateKeyCommand } = require('./commands/commands');
-const { purchase, setup, holding, passwordSubmit, settings, changeSettings, updateSettings, exportPrivateKey } = require('./commands/handlers');
+const { buyCommand, holdingCommand, setupCommand, settingsCommand, exportPrivateKeyCommand, getWalletCommand } = require('./commands/commands');
+const { purchase, setup, holding, passwordSubmit, settings, changeSettings, updateSettings, exportPrivateKey, getWallet } = require('./commands/handlers');
 
 const client = new Client({
     intents: [
@@ -12,18 +12,19 @@ const client = new Client({
 });
 
 const installCommands = () => {
-    client.application.commands.create(purchaseCommand)
+    client.application.commands.create(buyCommand)
     client.application.commands.create(holdingCommand)
     client.application.commands.create(setupCommand)
     client.application.commands.create(settingsCommand)
     client.application.commands.create(exportPrivateKeyCommand)
+    client.application.commands.create(getWalletCommand)
 }
 
 const registerInteractions = () => {
     client.on(Events.InteractionCreate, async interaction => {
         if (interaction.commandName == 'ping') {
             pingInteraction(interaction);
-        } else if (interaction.commandName == 'purchase') {
+        } else if (interaction.commandName == 'buy') {
             await purchase(interaction);
         } else if (interaction.commandName == 'setup') {
             await setup(interaction)
@@ -39,7 +40,10 @@ const registerInteractions = () => {
             await changeSettings(interaction)
         } else if (interaction.customId == 'settingsModal') {
             await updateSettings(interaction)
+        } else if (interaction.commandName == 'wallet') {
+            await getWallet(interaction)
         }
+
     });
 }
 

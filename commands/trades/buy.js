@@ -39,7 +39,7 @@ const buy = async (contract, userWallet, slipPercent, ethAmount, maxFeePerGas, m
             fee: 3000,
             recipient: userWallet,
             deadline: Math.floor(Date.now() / 1000 + 1800),
-            slippageTolerance: new Percent(parseInt(slipPercent), 100),
+            slippageTolerance: new Percent(10, 100),
             amountIn: inputAmount,
             amountOutMinimum: 0,
             sqrtPriceLimitX96: 0
@@ -66,7 +66,7 @@ const buy = async (contract, userWallet, slipPercent, ethAmount, maxFeePerGas, m
         return {
             hash: txRes.hash,
             spent: ethAmount,
-            bought: endTokenAmount - startTokenAmount
+            recieved: endTokenAmount - startTokenAmount
         }
 
     } catch (e) {
