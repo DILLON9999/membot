@@ -23,7 +23,6 @@ const { withdrawModal } = require('./components/withdrawModal')
 // Trade functions
 const { sell } = require('./trades/sell')
 const { buy } = require('./trades/buy')
-const { newBuy } = require('./trades/newBuy')
 
 
 const bcrypt = require('bcrypt');
@@ -96,7 +95,7 @@ const purchase = async (interaction) => {
         // Send transaction
         await submitConfirmation.update({ content: `Sending purchase for ${ethAmount} ETH`, components: [] });
         // const txRes = await buy(contract, user.walletAddress, user.defaultSlippage, ethAmount, user.maxFeePerGas, user.maxPriorityFeePerGas, user.gasLimit, user.buyDelta, walletSecret, dataEmbed.saveData.decimals)
-        const txRes = await newBuy(dataEmbed.saveData, user.walletAddress, user.defaultSlippage, ethAmount, user.maxFeePerGas, user.maxPriorityFeePerGas, user.gasLimit, user.buyDelta, walletSecret)
+        const txRes = await buy(dataEmbed.saveData, user.walletAddress, user.defaultSlippage, ethAmount, user.maxFeePerGas, user.maxPriorityFeePerGas, user.gasLimit, user.buyDelta, walletSecret)
 
         // Return and send error if transaction not placed
         if (txRes == 'error') {
