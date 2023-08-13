@@ -77,26 +77,11 @@ const newBuy = async (token, userWallet, slipPercent, amount, maxFeePerGas, maxP
                 {
                     recipient: userWallet,
                     slippageTolerance: new Percent(parseInt(slipPercent), 100),
-                    // type: SwapType.SWAP_ROUTER_02,
-                    // deadline: Math.floor(Date.now() / 1000 + 1800),
-
                     type: SwapType.UNIVERSAL_ROUTER,
                     deadlineOrPreviousBlockhash: Math.floor(Date.now() / 1000 + 1800),
-
                     inputTokenPermit: {
                         ...permit,
                         signature
-
-                        // for ROUTER V2
-                        // r: signature.r,
-                        // s: signature.s,
-                        // v: signature.v,
-                        // for allowance transfer with Router V2
-                        // expiry: permit.sigDeadline,
-                        // nonce: permit.details.nonce
-                        // for signature transfer with Router V2
-                        // deadline: permit.deadline,
-                        // amount: permit.permitted.amount
                     }
                 }
             );
@@ -105,9 +90,6 @@ const newBuy = async (token, userWallet, slipPercent, amount, maxFeePerGas, maxP
         }
 
         async function executeSwap() {
-
-            // swap basic info
-            // NOTE: not handling native currency swaps here
             const sourceToken = WETH;
             const destToken = buyToken;
 
@@ -120,12 +102,15 @@ const newBuy = async (token, userWallet, slipPercent, amount, maxFeePerGas, maxP
             // expiry for permit & tx confirmation, 30 mins
             const expiry = Math.floor(Date.now() / 1000 + 1800);
 
-            // check if we have approved enough amount
-            // for PERMIT2 in source token contract
+            // check token spending allowance
             const allowance = await getAllowanceAmount(
                 sourceToken.address,
                 PERMIT2_ADDRESS
             );
+
+            console.log('allowance:', ethers.utils.formatEther(allowance));  
+
+            // if allowance too low, up it
             if (ethers.utils.formatEther(allowance) == 0 || ethers.utils.formatEther(allowance) < amountInWei) {
                 console.log('Approving Token For Sale')
                 await approvePermit2Contract(
@@ -134,25 +119,16 @@ const newBuy = async (token, userWallet, slipPercent, amount, maxFeePerGas, maxP
                 );
             }
 
-            // allowance provider is part of permit2 sdk
-            // using it to get nonce value of last permit
-            // we signed for this source token
             const allowanceProvider = new AllowanceProvider(
                 ethersProvider,
                 PERMIT2_ADDRESS
             );
 
-            // for allowance based transfer we can just use
-            // next nonce value for permits.
-            // for signature transfer probably it has to be
-            // a prime number or something. checks uniswap docs.
-            // const nonce = 1;
             const nonce = await allowanceProvider.getNonce(
                 sourceToken.address,
                 userWallet,
                 uniswapRouterAddress
             );
-            // console.log('nonce value:', nonce);
 
             // create permit with AllowanceTransfer
             const permit = {
@@ -173,11 +149,6 @@ const newBuy = async (token, userWallet, slipPercent, amount, maxFeePerGas, maxP
 
             // create signature for permit
             const signature = await ethersSigner._signTypedData(domain, types, values);
-            // console.log('signature: ', signature);
-            // for V2 router we need to provide v, r, & s from signature.
-            // we can split the signature using provider utils
-            // const splitSignature = ethers.utils.splitSignature(signature);
-            // console.log('split signature:', splitSignature);
 
             // NOTE: optionally verify the signature
             const address = await ethers.utils.verifyTypedData(
@@ -199,8 +170,6 @@ const newBuy = async (token, userWallet, slipPercent, amount, maxFeePerGas, maxP
                 signature
             );
 
-            // console.log('route calldata:', route.methodParameters.calldata);
-
             // create transaction arguments for swap
             const txArguments = {
                 data: route.methodParameters.calldata,
@@ -218,6 +187,10 @@ const newBuy = async (token, userWallet, slipPercent, amount, maxFeePerGas, maxP
             const transaction = await ethersSigner.sendTransaction(txArguments);
             await transaction.wait()
             const endTokenAmount = ethers.utils.formatUnits(await tokenContract.balanceOf(userWallet), token.decimals)
+
+            // Max approve new purchased token for later
+            console.log('Max Approving New Token')
+            await approvePermit2Contract(token.address, ethers.constants.MaxUint256) // APPROVE MAX AMOUNT
 
             return {
                 hash: transaction.hash,

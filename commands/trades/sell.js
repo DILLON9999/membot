@@ -82,8 +82,6 @@ const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, ma
         }
 
         async function executeSwap() {
-            // swap basic info
-            // NOTE: not handling native currency swaps here
             const sourceToken = sellToken;
             const destToken = WETH;
 
@@ -101,8 +99,7 @@ const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, ma
             // expiry for permit & tx confirmation, 30 mins
             const expiry = Math.floor(Date.now() / 1000 + 1800);
 
-            // check if we have approved enough amount
-            // for PERMIT2 in source token contract
+            // check token spending allowance
             const allowance = await getAllowanceAmount(
                 sourceToken.address,
                 PERMIT2_ADDRESS
@@ -110,6 +107,7 @@ const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, ma
 
             console.log('allowance:', ethers.utils.formatEther(allowance));  
 
+            // if allowance too low, up it
             if (ethers.utils.formatEther(allowance) == 0 || ethers.utils.formatEther(allowance) < amountInWei) {
                 console.log('Approving Token For Sale')
                 await approvePermit2Contract(
@@ -188,21 +186,6 @@ const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, ma
 
             // Current WETH (Calculate ETH Sold)
             const currentEth = ethers.utils.formatUnits(await ethersProvider.getBalance(userWallet), 18)
-
-            // if (currentWeth > 0) {
-
-            //     // WETH Contract Instance
-            //     const WETH_Contract = new ethers.Contract(WETH.address, wethAbi, ethersSigner);
-
-            //     // Unwrap WETH to ETH
-            //     const wethToSell = ethers.utils.parseEther(currentWeth)
-            //     const unwrapTx = await WETH_Contract.withdraw(wethToSell.toString());
-            //     await unwrapTx.wait();
-
-            //     console.log('ETH Balance:', ethers.utils.formatUnits(await ethersProvider.getBalance(userWallet), 18))
-            // } else {
-            //     console.log('No WETH Found')
-            // }
 
             return {
                 hash: transaction.hash,
