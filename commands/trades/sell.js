@@ -11,8 +11,7 @@ const { UNIVERSAL_ROUTER_ADDRESS } = require('@uniswap/universal-router-sdk')
 const erc20Abi = require('./abi.json')
 const wethAbi = require('./wethAbi.json')
 
-const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, maxPriorityFeePerGas, gasLimit, sellDelta, walletSecret) => {
-
+const sell = async (token, sellAmount, user, walletSecret) => {
     try {
 
         const chainId = 1
@@ -52,7 +51,7 @@ const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, ma
 
         async function getAllowanceAmount(erc20TokenAddress, spender) {
             const erc20 = new ethers.Contract(erc20TokenAddress, erc20Abi, ethersSigner);
-            const allowance = await erc20.allowance(userWallet, spender);
+            const allowance = await erc20.allowance(user.walletAddress, spender);
             return allowance
         }
 
@@ -67,8 +66,8 @@ const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, ma
                 nativeOnChain(1), // Destination -> ETH
                 TradeType.EXACT_INPUT,
                 {
-                    recipient: userWallet,
-                    slippageTolerance: new Percent(parseInt(slipPercent), 100),
+                    recipient: user.walletAddress,
+                    slippageTolerance: new Percent(parseInt(user.defaultSlippage), 100),
                     type: SwapType.UNIVERSAL_ROUTER,
                     deadlineOrPreviousBlockhash: Math.floor(Date.now() / 1000 + 1800),
                     inputTokenPermit: {
@@ -87,7 +86,7 @@ const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, ma
 
             // Determine percent of total to sell
             const tokenContract = await new ethers.Contract(token.address, erc20Abi, ethersProvider)
-            const tokensHeld = ethers.utils.formatUnits(await tokenContract.balanceOf(userWallet), token.decimals)
+            const tokensHeld = ethers.utils.formatUnits(await tokenContract.balanceOf(user.walletAddress), token.decimals)
             const amount = tokensHeld * sellAmount
 
             // Convert percentage sale to WEI
@@ -121,7 +120,7 @@ const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, ma
 
             const nonce = await allowanceProvider.getNonce(
                 sourceToken.address,
-                userWallet,
+                user.walletAddress,
                 uniswapRouterAddress
             );
 
@@ -153,7 +152,7 @@ const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, ma
                 signature
             );
 
-            if (address !== userWallet)
+            if (address !== user.walletAddress)
                 throw new error('signature verification failed');
 
             // get swap route for tokens
@@ -165,16 +164,21 @@ const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, ma
                 signature
             );
 
+            // Return if gas is greater than set limit
+            if (user.maxGas) {
+                if ((BigInt(user.maxGas) * BigInt(1000000000)) > BigInt(route.gasPriceWei)) {
+                    return { resp: "error", reason: "Transaction gas beyond your set limit" }
+                }
+            }
+
             // create transaction arguments for swap
             const txArguments = {
                 data: route.methodParameters.calldata,
                 to: uniswapRouterAddress,
                 value: BigNumber.from(route.methodParameters.value),
-                from: userWallet,
+                from: user.walletAddress,
                 gasPrice: route.gasPriceWei,
-                gasLimit: BigNumber.from(gasLimit)
-                // maxFeePerGas: parseInt(maxFeePerGas) * 1e9, // gwei to wei
-                // maxPriorityFeePerGas: parseInt(maxPriorityFeePerGas) * 1e9 // gwei to wei
+                gasLimit: BigNumber.from(user.gasLimit)
             };
 
             // send out swap transaction

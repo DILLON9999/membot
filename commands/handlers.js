@@ -94,8 +94,7 @@ const purchase = async (interaction, contract) => {
 
         // Send transaction
         await submitConfirmation.reply({ content: `Sending purchase for ${ethAmount} ETH`, components: [] });
-        // const txRes = await buy(contract, user.walletAddress, user.defaultSlippage, ethAmount, user.maxFeePerGas, user.maxPriorityFeePerGas, user.gasLimit, user.buyDelta, walletSecret, dataEmbed.saveData.decimals)
-        const txRes = await buy(dataEmbed.saveData, user.walletAddress, user.defaultSlippage, ethAmount, user.maxFeePerGas, user.maxPriorityFeePerGas, user.gasLimit, user.buyDelta, walletSecret)
+        const txRes = await buy(dataEmbed.saveData, ethAmount, user, walletSecret)
 
         // Return and send error if transaction not placed
         if (txRes.resp == 'error') {
@@ -236,9 +235,9 @@ const holding = async (interaction) => {
             return;
         }
 
-        const txRes = await sell(chosenToken.token, user.walletAddress, user.defaultSlippage, chosenToken.percent, user.maxFeePerGas, user.maxPriorityFeePerGas, user.gasLimit, user.sellDelta, walletSecret)
+        const txRes = await sell(chosenToken.token, chosenToken.percent, user, walletSecret)
         if (txRes.resp == 'error') {
-            await interaction.editReply({ content: `Error: ${txRes.reason}`});
+            await interaction.editReply({ content: `Error: ${txRes.reason}` });
             return;
         }
 
@@ -330,12 +329,8 @@ const settings = async (interaction) => {
                     "inline": true
                 },
                 {
-                    "name": `Max Fee Per Gas`,
-                    "value": `\`${user.maxFeePerGas} GWEI\``
-                },
-                {
-                    "name": `Max Priority Fee Per Gas`,
-                    "value": `\`${user.maxPriorityFeePerGas} GWEI\``
+                    "name": `Max Gas`,
+                    "value": `\`${user.maxGas ? `${user.maxGas} GWEI` : 'Unset'}\``
                 },
                 {
                     "name": `Gas Limit`,
@@ -371,42 +366,41 @@ const changeSettings = async (interaction) => {
         .setCustomId('settingsModal')
         .setTitle('Update your wallet settings here');
 
-    const maxFeePerGasInput = new TextInputBuilder()
-        .setCustomId('maxFeePerGasInput')
-        .setLabel("Max Fee Per Gas")
+    const slippageInput = new TextInputBuilder()
+        .setCustomId('slippageInput')
+        .setLabel("Slippage Percent")
         .setStyle(TextInputStyle.Short)
         .setRequired(false)
 
-    const maxPriorityFeePerGasInput = new TextInputBuilder()
-        .setCustomId('maxPriorityFeePerGasInput')
-        .setLabel("Max Priority Fee Per Gas")
+    const maxGasInput = new TextInputBuilder()
+        .setCustomId('maxGasInput')
+        .setLabel("Max Gas (GWEI)")
         .setStyle(TextInputStyle.Short)
         .setRequired(false)
 
     const gasLimitInput = new TextInputBuilder()
         .setCustomId('gasLimitInput')
-        .setLabel("Gas Limit")
+        .setLabel("Gas Limit (WEI)")
         .setStyle(TextInputStyle.Short)
         .setRequired(false)
 
     const buyDeltaInput = new TextInputBuilder()
         .setCustomId('buyDeltaInput')
-        .setLabel("Buy Delta")
+        .setLabel("Buy Delta (GWEI)")
         .setStyle(TextInputStyle.Short)
         .setRequired(false)
 
     const sellDeltaInput = new TextInputBuilder()
         .setCustomId('sellDeltaInput')
-        .setLabel("Sell Delta")
+        .setLabel("Sell Delta (GWEI)")
         .setStyle(TextInputStyle.Short)
         .setRequired(false)
 
-    const firstActionRow = new ActionRowBuilder().addComponents(maxFeePerGasInput);
-    const secondActionRow = new ActionRowBuilder().addComponents(maxPriorityFeePerGasInput);
+    const firstActionRow = new ActionRowBuilder().addComponents(slippageInput);
+    const secondActionRow = new ActionRowBuilder().addComponents(maxGasInput);
     const thirdActionRow = new ActionRowBuilder().addComponents(gasLimitInput);
     const fourthActionRow = new ActionRowBuilder().addComponents(buyDeltaInput);
     const fifthActionRow = new ActionRowBuilder().addComponents(sellDeltaInput);
-
 
     // Add inputs to the modal
     settingsModal.addComponents(firstActionRow, secondActionRow, thirdActionRow, fourthActionRow, fifthActionRow);
@@ -423,14 +417,14 @@ const updateSettings = async (interaction) => {
         return;
     }
 
-    const maxFeePerGasInput = interaction.fields.getTextInputValue('maxFeePerGasInput');
-    const maxPriorityFeePerGasInput = interaction.fields.getTextInputValue('maxPriorityFeePerGasInput');
+    const slippageInput = interaction.fields.getTextInputValue('slippageInput');
+    const maxGasInput = interaction.fields.getTextInputValue('maxGasInput');
     const gasLimitInput = interaction.fields.getTextInputValue('gasLimitInput');
     const buyDeltaInput = interaction.fields.getTextInputValue('buyDeltaInput');
     const sellDeltaInput = interaction.fields.getTextInputValue('sellDeltaInput');
 
-    if (maxFeePerGasInput) { user.maxFeePerGas = maxFeePerGasInput }
-    if (maxPriorityFeePerGasInput) { user.maxPriorityFeePerGas = maxPriorityFeePerGasInput }
+    if (slippageInput) { user.defaultSlippage = slippageInput }
+    if (maxGasInput) { user.maxGas = maxGasInput }
     if (gasLimitInput) { user.gasLimit = gasLimitInput }
     if (buyDeltaInput) { user.buyDelta = buyDeltaInput }
     if (sellDeltaInput) { user.sellDelta = sellDeltaInput }

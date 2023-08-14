@@ -7,6 +7,7 @@ const userSchema = new mongoose.Schema({
     encryptedPrivateKey: { type: Object, unique: true },
     password: { type: String },
     defaultSlippage: { type: String },
+    maxGas: { type: String },
     maxFeePerGas: { type: String },
     maxPriorityFeePerGas: { type: String },
     gasLimit: { type: String },

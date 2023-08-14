@@ -11,7 +11,7 @@ const { UNIVERSAL_ROUTER_ADDRESS } = require('@uniswap/universal-router-sdk')
 const erc20Abi = require('./abi.json')
 const wethAbi = require('./wethAbi.json')
 
-const buy = async (token, userWallet, slipPercent, amount, maxFeePerGas, maxPriorityFeePerGas, gasLimit, sellDelta, walletSecret) => {
+const buy = async (token, amount, user, walletSecret) => {
 
     try {
 
@@ -50,7 +50,7 @@ const buy = async (token, userWallet, slipPercent, amount, maxFeePerGas, maxPrio
 
         // pull amount of token user is currently holding
         const tokenContract = await new ethers.Contract(token.address, erc20Abi, ethersProvider)
-        const startTokenAmount = ethers.utils.formatUnits(await tokenContract.balanceOf(userWallet), token.decimals)
+        const startTokenAmount = ethers.utils.formatUnits(await tokenContract.balanceOf(user.walletAddress), token.decimals)
 
         async function approvePermit2Contract(erc20Address, amount) {
             const erc20 = new ethers.Contract(erc20Address, erc20Abi, ethersSigner);
@@ -60,7 +60,7 @@ const buy = async (token, userWallet, slipPercent, amount, maxFeePerGas, maxPrio
 
         async function getAllowanceAmount(erc20TokenAddress, spender) {
             const erc20 = new ethers.Contract(erc20TokenAddress, erc20Abi, ethersSigner);
-            const allowance = await erc20.allowance(userWallet, spender);
+            const allowance = await erc20.allowance(user.walletAddress, spender);
             return allowance
         }
 
@@ -74,8 +74,8 @@ const buy = async (token, userWallet, slipPercent, amount, maxFeePerGas, maxPrio
                 destToken,
                 TradeType.EXACT_INPUT,
                 {
-                    recipient: userWallet,
-                    slippageTolerance: new Percent(parseInt(slipPercent), 100),
+                    recipient: user.walletAddress,
+                    slippageTolerance: new Percent(parseInt(user.defaultSlippage), 100),
                     type: SwapType.UNIVERSAL_ROUTER,
                     deadlineOrPreviousBlockhash: Math.floor(Date.now() / 1000 + 1800),
                     inputTokenPermit: {
@@ -123,7 +123,7 @@ const buy = async (token, userWallet, slipPercent, amount, maxFeePerGas, maxPrio
 
             const nonce = await allowanceProvider.getNonce(
                 sourceToken.address,
-                userWallet,
+                user.walletAddress,
                 uniswapRouterAddress
             );
 
@@ -155,7 +155,7 @@ const buy = async (token, userWallet, slipPercent, amount, maxFeePerGas, maxPrio
                 signature
             );
 
-            if (address !== userWallet)
+            if (address !== user.walletAddress)
                 throw new error('signature verification failed');
 
             // get swap route for tokens
@@ -167,23 +167,27 @@ const buy = async (token, userWallet, slipPercent, amount, maxFeePerGas, maxPrio
                 signature
             );
 
-            // create transaction arguments for swap
+            // Return if gas is greater than set limit
+            if (user.maxGas) {
+                if ((BigInt(user.maxGas) * BigInt(1000000000)) > BigInt(route.gasPriceWei)) {
+                    return { resp: "error", reason: "Transaction gas beyond your set limit" }
+                }
+            }
+
             const txArguments = {
                 data: route.methodParameters.calldata,
                 to: uniswapRouterAddress,
                 value: BigNumber.from(route.methodParameters.value),
-                from: userWallet,
+                from: user.walletAddress,
                 gasPrice: route.gasPriceWei,
-                gasLimit: BigNumber.from(gasLimit)
-                // maxFeePerGas: parseInt(maxFeePerGas) * 1e9, // gwei to wei
-                // maxPriorityFeePerGas: parseInt(maxPriorityFeePerGas) * 1e9 // gwei to wei
+                gasLimit: BigNumber.from(user.gasLimit)
             };
 
             // send out swap transaction
             const transaction = await ethersSigner.sendTransaction(txArguments);
             await transaction.wait()
             console.log('TX Hash:', transaction.hash)
-            const endTokenAmount = ethers.utils.formatUnits(await tokenContract.balanceOf(userWallet), token.decimals)
+            const endTokenAmount = ethers.utils.formatUnits(await tokenContract.balanceOf(user.walletAddress), token.decimals)
 
             // Max approve new purchased token for later
             await approvePermit2Contract(token.address, ethers.constants.MaxUint256) // APPROVE MAX AMOUNT
