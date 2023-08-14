@@ -8,17 +8,19 @@ const erc20Abi = require('./trades/abi.json')
 const ethersProvider = new ethers.providers.JsonRpcProvider(`https://mainnet.infura.io/v3/d25074e260984463be075e88db795106`);
 
 // Helper functions
-const { tokenData } = require('./helpers/tokenData')
-const { webhook } = require('./helpers/webhook')
-const { heldTokenData } = require('./helpers/heldTokenData');
-const { swapResponse } = require('./helpers/swapResponse')
+const { tokenData } = require('./components/embeds/tokenData')
+const { webhook } = require('./components/embeds/webhook')
+const { heldTokenData } = require('./components/embeds/heldTokenData');
+const { swapResponse } = require('./components/embeds/swapResponse')
+const { settingsEmbed } = require('./components/embeds/settingsEmbed')
 
 // Command components
-const { ethButtons } = require('./components/ethButtons')
-const { holdingButtons } = require('./components/holdingButtons');
-const { purchaseModal } = require('./components/purchaseModal')
-const { sellModal } = require('./components/sellModal')
-const { withdrawModal } = require('./components/withdrawModal')
+const { ethButtons } = require('./components/buttons/ethButtons')
+const { holdingButtons } = require('./components/buttons/holdingButtons');
+const { purchaseModal } = require('./components/modals/purchaseModal')
+const { sellModal } = require('./components/modals/sellModal')
+const { withdrawModal } = require('./components/modals/withdrawModal')
+const { settingsModal } = require('./components/modals/settingsModal')
 
 // Trade functions
 const { sell } = require('./trades/sell')
@@ -46,8 +48,7 @@ const purchase = async (interaction, contract) => {
             return;
         }
 
-        // Pull token data
-        // const contract = interaction.options.getString('contract');
+        // Send message embed from given contract
         const dataEmbed = await tokenData(contract)
 
         // Send data with purchase buttons
@@ -195,7 +196,6 @@ const holdingUi = async (interaction, tokens, index, userWallet) => {
         }
 
     } catch (e) {
-        console.log(e)
         if (!e.code == 'InteractionCollectorError') {
             console.log(e)
         }
@@ -273,55 +273,63 @@ const holding = async (interaction) => {
 
 const setup = async (interaction) => {
 
+    // Build setup modal
     const setupModal = new ModalBuilder()
         .setCustomId('setupModal')
         .setTitle('Setup Your Trading Wallet');
-
     const passwordInput = new TextInputBuilder()
         .setCustomId('passwordInput')
         .setLabel("Wallet Password")
         .setStyle(TextInputStyle.Short)
         .setMinLength(5)
         .setRequired(true)
-
     const actionRow = new ActionRowBuilder().addComponents(passwordInput);
     setupModal.addComponents(actionRow);
 
-    await interaction.showModal(setupModal);
+    const collectorFilter = i => i.user.id === interaction.user.id;
 
-}
+    try {
+        await interaction.showModal(setupModal);
+        const submit = await interaction.awaitModalSubmit({ filter: collectorFilter, time: 120_000 });
 
-const passwordSubmit = async (interaction) => {
+        // get password from modal
+        const password = submit.fields.getTextInputValue('passwordInput');
 
-    const password = interaction.fields.getTextInputValue('passwordInput');
+        //Generate a new account
+        const account = await web3.eth.accounts.create();
 
-    //Generate a new account
-    const account = await web3.eth.accounts.create();
+        // Encrypt private key and password
+        const encryptedPrivateKey = await web3.eth.accounts.encrypt(account.privateKey, password);
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    // Encrypt private key and password
-    const encryptedPrivateKey = await web3.eth.accounts.encrypt(account.privateKey, password);
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
+        let user = await User.findOne({ discordId: interaction.user.id });
+        if (user) {
+            await submit.reply({ content: `You have already created a wallet` })
+        } else {
+            user = new User({
+                discordId: interaction.user.id,
+                username: interaction.user.username,
+                walletAddress: account.address,
+                encryptedPrivateKey,
+                password: hashedPassword,
+                defaultSlippage: "25", // default
+                maxFeePerGas: "100", // default
+                maxPriorityFeePerGas: "5", // default
+                gasLimit: "1000000", // default
+                buyDelta: "5", // default
+                sellDelta: "15" // default        
+            });
+            await user.save();
+            await submit.reply({ content: `Your wallet address is: \`${account.address}\`` })
+        }
 
-    let user = await User.findOne({ discordId: interaction.user.id });
-    if (user) {
-        await interaction.reply({ content: `You have already created a wallet` })
-    } else {
-        user = new User({
-            discordId: interaction.user.id,
-            walletAddress: account.address,
-            encryptedPrivateKey,
-            password: hashedPassword,
-            defaultSlippage: "25", // default
-            maxFeePerGas: "100", // default
-            maxPriorityFeePerGas: "5", // default
-            gasLimit: "1000000", // default
-            buyDelta: "5", // default
-            sellDelta: "15" // default        
-        });
-        await user.save();
-        await interaction.reply({ content: `Your wallet address is: \`${account.address}\`` })
+    } catch (e) {
+        if (!e.code == 'InteractionCollectorError') {
+            console.log(e)
+        }
+        await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
+        return
     }
-
 }
 
 // ** Wallet Settings ** //
@@ -334,38 +342,6 @@ const settings = async (interaction) => {
         return;
     }
 
-    const embed = [
-        {
-            "type": "rich",
-            "title": `Your Wallet Settings`,
-            "description": "",
-            "color": 0x00FFFF,
-            "fields": [
-                {
-                    "name": `Slippage`,
-                    "value": `\`${user.defaultSlippage}%\``,
-                    "inline": true
-                },
-                {
-                    "name": `Max Gas`,
-                    "value": `\`${user.maxGas ? `${user.maxGas} GWEI` : 'Unset'}\``
-                },
-                {
-                    "name": `Gas Limit`,
-                    "value": `\`${user.gasLimit} WEI\``
-                },
-                {
-                    "name": `Buy Delta`,
-                    "value": `\`${user.buyDelta} GWEI\``
-                },
-                {
-                    "name": `Sell Delta`,
-                    "value": `\`${user.sellDelta} GWEI\``
-                }
-            ]
-        }
-    ]
-
     const changeSettings = new ButtonBuilder()
         .setCustomId('changesettings')
         .setLabel('Change Settings')
@@ -374,83 +350,41 @@ const settings = async (interaction) => {
     const row = new ActionRowBuilder()
         .addComponents(changeSettings);
 
-    interaction.reply({ embeds: embed, components: [row] })
+    const resp = await interaction.reply({ embeds: await settingsEmbed(user), components: [row] })
 
-}
+    const collectorFilter = i => i.user.id === interaction.user.id;
 
-const changeSettings = async (interaction) => {
+    try {
+        const confirmation = await resp.awaitMessageComponent({ filter: collectorFilter, time: 60000 });
+        // Wait for modal to be submitted
+        await confirmation.showModal(await settingsModal());
+        const submitConfirmation = await confirmation.awaitModalSubmit({ filter: collectorFilter, time: 120_000 });
 
-    const settingsModal = new ModalBuilder()
-        .setCustomId('settingsModal')
-        .setTitle('Update your wallet settings here');
+        // Modal inputs
+        const slippageInput = submitConfirmation.fields.getTextInputValue('slippageInput');
+        const maxGasInput = submitConfirmation.fields.getTextInputValue('maxGasInput');
+        const gasLimitInput = submitConfirmation.fields.getTextInputValue('gasLimitInput');
+        const buyDeltaInput = submitConfirmation.fields.getTextInputValue('buyDeltaInput');
+        const sellDeltaInput = submitConfirmation.fields.getTextInputValue('sellDeltaInput');
 
-    const slippageInput = new TextInputBuilder()
-        .setCustomId('slippageInput')
-        .setLabel("Slippage Percent")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
+        if (slippageInput) { user.defaultSlippage = slippageInput }
+        if (maxGasInput) { user.maxGas = maxGasInput }
+        if (gasLimitInput) { user.gasLimit = gasLimitInput }
+        if (buyDeltaInput) { user.buyDelta = buyDeltaInput }
+        if (sellDeltaInput) { user.sellDelta = sellDeltaInput }
 
-    const maxGasInput = new TextInputBuilder()
-        .setCustomId('maxGasInput')
-        .setLabel("Max Gas (GWEI)")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
+        await user.save()
 
-    const gasLimitInput = new TextInputBuilder()
-        .setCustomId('gasLimitInput')
-        .setLabel("Gas Limit (WEI)")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
+        await submitConfirmation.update({ content: `Settings Updated`, embeds: [], components: [] })
 
-    const buyDeltaInput = new TextInputBuilder()
-        .setCustomId('buyDeltaInput')
-        .setLabel("Buy Delta (GWEI)")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-
-    const sellDeltaInput = new TextInputBuilder()
-        .setCustomId('sellDeltaInput')
-        .setLabel("Sell Delta (GWEI)")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-
-    const firstActionRow = new ActionRowBuilder().addComponents(slippageInput);
-    const secondActionRow = new ActionRowBuilder().addComponents(maxGasInput);
-    const thirdActionRow = new ActionRowBuilder().addComponents(gasLimitInput);
-    const fourthActionRow = new ActionRowBuilder().addComponents(buyDeltaInput);
-    const fifthActionRow = new ActionRowBuilder().addComponents(sellDeltaInput);
-
-    // Add inputs to the modal
-    settingsModal.addComponents(firstActionRow, secondActionRow, thirdActionRow, fourthActionRow, fifthActionRow);
-    await interaction.showModal(settingsModal);
-
-}
-
-const updateSettings = async (interaction) => {
-
-    let user = await User.findOne({ discordId: interaction.user.id });
-
-    if (!user) {
-        interaction.reply('You haven\'t made a wallet yet. Use /setup to create one.');
-        return;
+        return
+    } catch (e) {
+        if (!e.code == 'InteractionCollectorError') {
+            console.log(e)
+        }
+        await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
+        return
     }
-
-    const slippageInput = interaction.fields.getTextInputValue('slippageInput');
-    const maxGasInput = interaction.fields.getTextInputValue('maxGasInput');
-    const gasLimitInput = interaction.fields.getTextInputValue('gasLimitInput');
-    const buyDeltaInput = interaction.fields.getTextInputValue('buyDeltaInput');
-    const sellDeltaInput = interaction.fields.getTextInputValue('sellDeltaInput');
-
-    if (slippageInput) { user.defaultSlippage = slippageInput }
-    if (maxGasInput) { user.maxGas = maxGasInput }
-    if (gasLimitInput) { user.gasLimit = gasLimitInput }
-    if (buyDeltaInput) { user.buyDelta = buyDeltaInput }
-    if (sellDeltaInput) { user.sellDelta = sellDeltaInput }
-
-    await user.save()
-
-    await interaction.reply('Settings updated')
-
 }
 
 const exportPrivateKey = async (interaction) => {
@@ -562,4 +496,4 @@ const getWallet = async (interaction) => {
 
 }
 
-module.exports = { purchase, setup, holding, passwordSubmit, settings, changeSettings, updateSettings, exportPrivateKey, getWallet };
+module.exports = { purchase, setup, holding, settings, exportPrivateKey, getWallet };

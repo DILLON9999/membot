@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 // Create User Schema
 const userSchema = new mongoose.Schema({
     discordId: { type: String, unique: true },
+    username: { type: String, unique: true },
     walletAddress: { type: String, unique: true },
     encryptedPrivateKey: { type: Object, unique: true },
     password: { type: String },
