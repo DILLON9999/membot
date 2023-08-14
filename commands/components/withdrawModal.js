@@ -4,7 +4,7 @@ const withdrawModal = async (defaultValue) => {
 
     const withdrawModal = new ModalBuilder()
         .setCustomId('withdrawModal')
-        .setTitle('Withdraw ETH');
+        .setTitle('Withdraw');
     const ethInput = new TextInputBuilder()
         .setCustomId('ethInput')
         .setLabel("Amount to withdraw")
