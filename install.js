@@ -1,6 +1,6 @@
 const { Client, Collection, Events, GatewayIntentBits, SlashCommandBuilder } = require('discord.js');
-const { buyCommand, holdingCommand, setupCommand, settingsCommand, exportPrivateKeyCommand, getWalletCommand } = require('./commands/commands');
-const { purchase, setup, holding, settings, exportPrivateKey, getWallet } = require('./commands/handlers');
+const { buyCommand, holdingCommand, setupCommand, settingsCommand, exportPrivateKeyCommand, getWalletCommand, referralCommand } = require('./commands/commands');
+const { purchase, setup, holding, settings, exportPrivateKey, getWallet, referrals } = require('./commands/handlers');
 
 const client = new Client({
     intents: [
@@ -18,6 +18,7 @@ const installCommands = () => {
     client.application.commands.create(settingsCommand)
     client.application.commands.create(exportPrivateKeyCommand)
     client.application.commands.create(getWalletCommand)
+    client.application.commands.create(referralCommand)
 }
 
 const registerInteractions = () => {
@@ -36,6 +37,8 @@ const registerInteractions = () => {
             await settings(interaction)
         } else if (interaction.commandName == 'wallet') {
             await getWallet(interaction)
+        } else if (interaction.commandName == 'referrals') {
+            await referrals(interaction)
         }
 
     });

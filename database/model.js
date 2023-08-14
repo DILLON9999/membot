@@ -14,7 +14,9 @@ const userSchema = new mongoose.Schema({
     gasLimit: { type: String },
     buyDelta: { type: String },
     sellDelta: { type: String },
-    tokens: [{address: String, decimals: Number, symbol: String, name: String}]
+    tokens: [{address: String, decimals: Number, symbol: String, name: String}],
+    referralUses: { type: Number },
+    hasUsedReferral: { type: Boolean }
 });
 
 const User = mongoose.model("User", userSchema);

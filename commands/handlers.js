@@ -496,4 +496,80 @@ const getWallet = async (interaction) => {
 
 }
 
-module.exports = { purchase, setup, holding, settings, exportPrivateKey, getWallet };
+// ** Referrals ** //
+const referrals = async (interaction) => {
+
+    const user = await User.findOne({ discordId: interaction.user.id });
+    if (!user) {
+        interaction.reply('You haven\'t made a wallet yet. Use /setup to create one.');
+        return;
+    }
+
+    // Use referall code
+    if (interaction.options.getString('use')) {
+
+        const username = interaction.options.getString('use')
+
+        // check if user has already used a code
+        if (user.hasUsedReferral) {
+            interaction.reply('You have already used a referral code.');
+            return;
+        }
+
+        // check if code exists
+        const referallUser = await User.findOne({ username: username });
+        if (!referallUser) {
+            interaction.reply('Referall code not found.');
+            return;
+        }
+
+        // check if it's the users referall code
+        if (username == interaction.user.username) {
+            interaction.reply('bruh you cant use your own referall code lol');
+            return;
+        }
+
+        // add referall code and save that user has used it
+        referallUser.referralUses += 1
+        await referallUser.save()
+        user.hasUsedReferral = true
+        await user.save()
+        interaction.reply('Referall code used.');
+        return;
+    }
+
+    // Check if account has referalls setup
+    const referallUses = user.referralUses ? user.referralUses : 0
+    const referallCode = user.username ? user.username : interaction.user.username
+
+    // Setup account for referrals
+    if (!user.username) {
+        user.username = interaction.user.username
+        user.referralUses = 0
+        await user.save()
+    }
+
+    const referralEmbed = [
+        {
+            "type": "rich",
+            "title": "",
+            "description": "",
+            "color": 0x00FFFF,
+            "fields": [
+                {
+                    "name": `Referall Code`,
+                    "value": `\`${referallCode}\``
+                },
+                {
+                    "name": `Referall Uses`,
+                    "value": `\`${referallUses}\``
+                }
+            ]
+        }
+    ]
+
+    await interaction.reply({ embeds: referralEmbed })
+    return
+}
+
+module.exports = { purchase, setup, holding, settings, exportPrivateKey, getWallet, referrals };

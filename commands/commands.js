@@ -32,4 +32,12 @@ const exportPrivateKeyCommand = new SlashCommandBuilder()
             .setDescription('Your wallets password')
             .setRequired(true))
 
-module.exports = { buyCommand, holdingCommand, setupCommand, settingsCommand, getWalletCommand, exportPrivateKeyCommand };
+const referralCommand = new SlashCommandBuilder()
+    .setName('referrals')
+    .setDescription('View your referral code and uses')
+    .addStringOption(option =>
+        option.setName('use')
+            .setDescription('Use anothers referall code'))
+
+
+module.exports = { buyCommand, holdingCommand, setupCommand, settingsCommand, getWalletCommand, exportPrivateKeyCommand, referralCommand };
