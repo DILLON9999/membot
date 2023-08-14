@@ -126,17 +126,18 @@ const purchase = async (interaction, contract) => {
     }
 }
 
-const holdingUi = async (interaction, tokens, index, userWallet, walletEmbed) => {
+const holdingUi = async (interaction, tokens, index, userWallet) => {
 
     // Get amount of token currently held
     const tokenContract = await new ethers.Contract(tokens[index].address, erc20Abi, ethersProvider)
     const tokensHeld = ethers.utils.formatUnits(await tokenContract.balanceOf(userWallet), tokens[index].decimals)
+    const walletBalance = Number(ethers.utils.formatUnits(await ethersProvider.getBalance(userWallet), 18)).toFixed(4)
 
-    const dataEmbed = await heldTokenData(tokens[index].address, Number(tokensHeld).toFixed(4))
+    const dataEmbed = await heldTokenData(tokens[index].address, Number(tokensHeld).toFixed(4), walletBalance)
 
     // Send data with purchase buttons
     const holdingResponse = await interaction.editReply({
-        embeds: [walletEmbed, dataEmbed.embed],
+        embeds: [dataEmbed.embed],
         components: await holdingButtons(tokens, index)
     })
 
@@ -148,7 +149,11 @@ const holdingUi = async (interaction, tokens, index, userWallet, walletEmbed) =>
 
         // Get password from popup modal if sell is selected
         let password;
-        if (holdingChoice.customId !== 'prev' && holdingChoice.customId !== 'next') {
+        let tokenAmount;
+        let withdrawWallet;
+
+        // Pop up the sell modal
+        if (holdingChoice.customId !== 'prev' && holdingChoice.customId !== 'next' && holdingChoice.customId !== 'withdraw') {
             await holdingChoice.showModal(await sellModal());
             await holdingChoice.awaitModalSubmit({ filter: collectorFilter, time: 120_000 })
                 .then(async (sellPasswordModal) => { // sellPasswordModal is correctly passed here.
@@ -156,23 +161,37 @@ const holdingUi = async (interaction, tokens, index, userWallet, walletEmbed) =>
                     sellPasswordModal.deferUpdate()
                 })
                 .catch(err => console.log(err));
+
+            // Pop up the withdraw modal
+        } else if (holdingChoice.customId == 'withdraw') {
+            await holdingChoice.showModal(await withdrawModal());
+            await holdingChoice.awaitModalSubmit({ filter: collectorFilter, time: 120_000 })
+                .then(async (withdrawTokenModal) => {
+                    password = await withdrawTokenModal.fields.getTextInputValue('withdrawPassword');
+                    tokenAmount = await withdrawTokenModal.fields.getTextInputValue('ethInput');
+                    withdrawWallet = await withdrawTokenModal.fields.getTextInputValue('withdrawWallet')
+                    withdrawTokenModal.deferUpdate()
+                })
+                .catch(err => console.log(err));
         }
 
         switch (holdingChoice.customId) {
             case 'prev':
                 holdingChoice.deferUpdate()
-                return await holdingUi(interaction, tokens, index - 1, userWallet, walletEmbed)
+                return await holdingUi(interaction, tokens, index - 1, userWallet)
             case 'next':
                 holdingChoice.deferUpdate()
-                return await holdingUi(interaction, tokens, index + 1, userWallet, walletEmbed)
+                return await holdingUi(interaction, tokens, index + 1, userWallet)
             case 'sellQuarter':
-                return { "percent": 0.25, "token": tokens[index], "password": password }
+                return { "call": "sell", "percent": 0.25, "token": tokens[index], "password": password }
             case 'sellHalf':
-                return { "percent": 0.5, "token": tokens[index], "password": password }
+                return { "call": "sell", "percent": 0.5, "token": tokens[index], "password": password }
             case 'sellThreeQuarters':
-                return { "percent": 0.75, "token": tokens[index], "password": password }
+                return { "call": "sell", "percent": 0.75, "token": tokens[index], "password": password }
             case 'sellFull':
-                return { "percent": 1, "token": tokens[index], "password": password }
+                return { "call": "sell", "percent": 1, "token": tokens[index], "password": password }
+            case 'withdraw':
+                return { "call": "withdraw", "token": tokens[index], "amount": tokenAmount, "withdrawWallet": withdrawWallet, "password": password }
         }
 
     } catch (e) {
@@ -203,25 +222,8 @@ const holding = async (interaction) => {
         // Set reply to edit later
         await interaction.reply("Checking Tokens...")
 
-        const walletEmbed = {
-            "type": "rich",
-            "title": "",
-            "description": "",
-            "color": 0x00FFFF,
-            "fields": [
-                {
-                    "name": `Balance`,
-                    "value": `\`${Number(ethers.utils.formatUnits(await ethersProvider.getBalance(user.walletAddress), 18)).toFixed(4)} ETH\``
-                },
-                {
-                    "name": `Wallet Address`,
-                    "value": `\`${user.walletAddress}\``
-                }
-            ]
-        }
-
         // Initialize UI at the first index of held tokens
-        const chosenToken = await holdingUi(interaction, user.tokens, 0, user.walletAddress, walletEmbed)
+        const chosenToken = await holdingUi(interaction, user.tokens, 0, user.walletAddress)
 
         // Clear buttons at bottom
         await interaction.editReply({ components: [] });
@@ -233,6 +235,22 @@ const holding = async (interaction) => {
         } catch {
             await interaction.editReply({ content: 'Incorrect password', embeds: [], components: [] });
             return;
+        }
+
+        // Send tokens to other wallet if withdraw called
+        if (chosenToken.call == 'withdraw') {
+            try {
+                const wallet = new ethers.Wallet(walletSecret, ethersProvider)
+                const contract = new ethers.Contract(chosenToken.token.address, erc20Abi, wallet);
+                const howMuchTokens = ethers.utils.parseUnits(chosenToken.amount, chosenToken.token.decimals)
+                await contract.transfer(chosenToken.withdrawWallet, howMuchTokens)
+                await interaction.editReply({ content: `Withdrawn to: ${chosenToken.withdrawWallet}` });
+                return
+            } catch (e) {
+                console.log(e)
+                await interaction.editReply({ content: `Error: Error sending withdraw`, embeds: [] });
+                return
+            }
         }
 
         const txRes = await sell(chosenToken.token, chosenToken.percent, user, walletSecret)

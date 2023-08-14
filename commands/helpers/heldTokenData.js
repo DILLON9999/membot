@@ -1,6 +1,6 @@
 const axios = require('axios')
 
-const heldTokenData = async (address, amountHeld) => {
+const heldTokenData = async (address, amountHeld, walletBalance) => {
 
     let embed;
     let respCode;
@@ -25,6 +25,10 @@ const heldTokenData = async (address, amountHeld) => {
                     "color": 0x00FFFF,
                     "fields": [
                         {
+                            "name": `Wallet Balance`,
+                            "value": `\`${walletBalance} ETH\``
+                        },
+                        {
                             "name": `Total Supply`,
                             "value": `\`${data.total_supply.slice(0, -(data.decimals + 2))}\``
                         },
@@ -43,13 +47,14 @@ const heldTokenData = async (address, amountHeld) => {
                             "value": ` `
                         },
                         {
-                            "name": `24 Hour Volume ($)`,
+                            "name": `24h Volume ($)`,
                             "value": `\`${Math.round(parseFloat(data.volume_usd.h24) * 100) / 100}\``,
                             "inline": true
                         },
                         {
                             "name": `Market Cap ($)`,
-                            "value": `\`${Math.round(parseFloat(data.market_cap_usd) * 100) / 100}\``
+                            "value": `\`${Math.round(parseFloat(data.market_cap_usd) * 100) / 100}\``,
+                            "inline": true
                         }
                     ]
                 }

@@ -7,7 +7,7 @@ const withdrawModal = async (defaultValue) => {
         .setTitle('Withdraw ETH');
     const ethInput = new TextInputBuilder()
         .setCustomId('ethInput')
-        .setLabel("Amount of ETH to withdraw")
+        .setLabel("Amount to withdraw")
         .setStyle(TextInputStyle.Short)
         .setRequired(true)
     const withdrawWallet = new TextInputBuilder()

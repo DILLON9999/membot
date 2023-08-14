@@ -2,7 +2,7 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBui
 
 const holdingButtons = async (tokensList, index) => {
 
-    // Top Row
+    // Arrow Keys
     const prev = new ButtonBuilder()
         .setCustomId('prev')
         .setLabel('Prev')
@@ -17,9 +17,9 @@ const holdingButtons = async (tokensList, index) => {
     if (index == 0) { prev.setDisabled(true) }
 
     // Disable next button if looking at end of list
-    if (!tokensList[index+1]) { next.setDisabled(true) }
+    if (!tokensList[index + 1]) { next.setDisabled(true) }
 
-    // Bottom Row
+    // Selling Options
     const sellQuarter = new ButtonBuilder()
         .setCustomId('sellQuarter')
         .setLabel('Sell 25%')
@@ -40,13 +40,23 @@ const holdingButtons = async (tokensList, index) => {
         .setLabel('Sell 100%')
         .setStyle(ButtonStyle.Primary)
 
+    // Withdraw
+    const withdraw = new ButtonBuilder()
+        .setCustomId('withdraw')
+        .setLabel('Withdraw')
+        .setStyle(ButtonStyle.Secondary)
+
+
     const topRow = new ActionRowBuilder()
         .addComponents(prev, next);
 
-    const bottomRow = new ActionRowBuilder()
+    const middleRow = new ActionRowBuilder()
         .addComponents(sellQuarter, sellHalf, sellThreeQuarters, sellFull)
 
-    return [topRow, bottomRow]
+    const bottomRow = new ActionRowBuilder()
+        .addComponents(withdraw)
+
+    return [topRow, middleRow, bottomRow]
 
 }
 
