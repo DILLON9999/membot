@@ -17,43 +17,43 @@ const heldTokenData = async (address, amountHeld) => {
 
                 const data = response.data.data.attributes
 
-                embed = [
-                    {
-                        "type": "rich",
-                        "title": `Holding: ${data.name}`,
-                        "description": `${amountHeld} ${data.symbol}`,
-                        "color": 0x00FFFF,
-                        "fields": [
-                            {
-                                "name": `Total Supply`,
-                                "value": `\`${data.total_supply}\``
-                            },
-                            {
-                                "name": `Fully Diluted Value ($)`,
-                                "value": `\`${Math.round(parseFloat(data.fdv_usd) * 100) / 100}\``,
-                                "inline": true
-                            },
-                            {
-                                "name": `Reserve ($)`,
-                                "value": `\`${Math.round(parseFloat(data.total_reserve_in_usd) * 100) / 100}\``,
-                                "inline": true
-                            },
-                            {
-                                "name": ` `,
-                                "value": ` `
-                            },
-                            {
-                                "name": `24 Hour Volume ($)`,
-                                "value": `\`${Math.round(parseFloat(data.volume_usd.h24) * 100) / 100}\``,
-                                "inline": true
-                            },
-                            {
-                                "name": `Market Cap ($)`,
-                                "value": `\`${Math.round(parseFloat(data.market_cap_usd) * 100) / 100}\``
-                            }
-                        ]
-                    }
-                ]
+                embed =
+                {
+                    "type": "rich",
+                    "title": `Holding: ${data.name}`,
+                    "description": `${amountHeld} ${data.symbol}`,
+                    "color": 0x00FFFF,
+                    "fields": [
+                        {
+                            "name": `Total Supply`,
+                            "value": `\`${data.total_supply.slice(0, -(data.decimals + 2))}\``
+                        },
+                        {
+                            "name": `FDV ($)`,
+                            "value": `\`${Math.round(parseFloat(data.fdv_usd) * 100) / 100}\``,
+                            "inline": true
+                        },
+                        {
+                            "name": `Reserve ($)`,
+                            "value": `\`${Math.round((parseFloat(data.total_reserve_in_usd)) * 2 * 100) / 100}\``,
+                            "inline": true
+                        },
+                        {
+                            "name": ` `,
+                            "value": ` `
+                        },
+                        {
+                            "name": `24 Hour Volume ($)`,
+                            "value": `\`${Math.round(parseFloat(data.volume_usd.h24) * 100) / 100}\``,
+                            "inline": true
+                        },
+                        {
+                            "name": `Market Cap ($)`,
+                            "value": `\`${Math.round(parseFloat(data.market_cap_usd) * 100) / 100}\``
+                        }
+                    ]
+                }
+
 
                 respCode = "success"
 

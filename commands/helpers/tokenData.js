@@ -39,12 +39,12 @@ const tokenData = async (address) => {
                                 "value": `\`${data.total_supply.slice(0, -(data.decimals+2))}\``
                             },
                             {
-                                "name": `Fully Diluted Value ($)`,
+                                "name": `FDV ($)`,
                                 "value": `\`${Math.round(parseFloat(data.fdv_usd) * 100) / 100}\``
                             },
                             {
                                 "name": `Reserve ($)`,
-                                "value": `\`${Math.round(parseFloat(data.total_reserve_in_usd) * 100) / 100}\``
+                                "value": `\`${Math.round( (parseFloat(data.total_reserve_in_usd)) * 2 * 100) / 100}\``
                             },
                             {
                                 "name": `24 Hour Volume ($)`,

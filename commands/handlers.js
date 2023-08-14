@@ -104,7 +104,7 @@ const purchase = async (interaction, contract) => {
         }
 
         // Show successful embed message
-        await submitConfirmation.update({ content: '', embeds: await swapResponse(txRes, dataEmbed.saveData.symbol, 'ETH') });
+        await submitConfirmation.followUp({ content: '', embeds: await swapResponse(txRes, dataEmbed.saveData.symbol, 'ETH') });
 
         // Send successful swap webhook
         await webhook(txRes, dataEmbed.saveData.symbol, 'ETH')
@@ -127,7 +127,7 @@ const purchase = async (interaction, contract) => {
     }
 }
 
-const holdingUi = async (interaction, tokens, index, userWallet) => {
+const holdingUi = async (interaction, tokens, index, userWallet, walletEmbed) => {
 
     // Get amount of token currently held
     const tokenContract = await new ethers.Contract(tokens[index].address, erc20Abi, ethersProvider)
@@ -137,7 +137,7 @@ const holdingUi = async (interaction, tokens, index, userWallet) => {
 
     // Send data with purchase buttons
     const holdingResponse = await interaction.editReply({
-        embeds: dataEmbed.embed,
+        embeds: [walletEmbed, dataEmbed.embed],
         components: await holdingButtons(tokens, index)
     })
 
@@ -162,10 +162,10 @@ const holdingUi = async (interaction, tokens, index, userWallet) => {
         switch (holdingChoice.customId) {
             case 'prev':
                 holdingChoice.deferUpdate()
-                return await holdingUi(interaction, tokens, index - 1, userWallet)
+                return await holdingUi(interaction, tokens, index - 1, userWallet, walletEmbed)
             case 'next':
                 holdingChoice.deferUpdate()
-                return await holdingUi(interaction, tokens, index + 1, userWallet)
+                return await holdingUi(interaction, tokens, index + 1, userWallet, walletEmbed)
             case 'sellQuarter':
                 return { "percent": 0.25, "token": tokens[index], "password": password }
             case 'sellHalf':
@@ -204,8 +204,25 @@ const holding = async (interaction) => {
         // Set reply to edit later
         await interaction.reply("Checking Tokens...")
 
+        const walletEmbed = {
+            "type": "rich",
+            "title": "",
+            "description": "",
+            "color": 0x00FFFF,
+            "fields": [
+                {
+                    "name": `Balance`,
+                    "value": `\`${Number(ethers.utils.formatUnits(await ethersProvider.getBalance(user.walletAddress), 18)).toFixed(4)} ETH\``
+                },
+                {
+                    "name": `Wallet Address`,
+                    "value": `\`${user.walletAddress}\``
+                }
+            ]
+        }
+
         // Initialize UI at the first index of held tokens
-        const chosenToken = await holdingUi(interaction, user.tokens, 0, user.walletAddress)
+        const chosenToken = await holdingUi(interaction, user.tokens, 0, user.walletAddress, walletEmbed)
 
         // Clear buttons at bottom
         await interaction.editReply({ components: [] });
@@ -215,13 +232,13 @@ const holding = async (interaction) => {
         try {
             walletSecret = (await web3.eth.accounts.decrypt(user.encryptedPrivateKey, chosenToken.password)).privateKey
         } catch {
-            interaction.editReply({ content: 'Incorrect password', embeds: [], components: [] });
+            await interaction.editReply({ content: 'Incorrect password', embeds: [], components: [] });
             return;
         }
 
         const txRes = await sell(chosenToken.token, user.walletAddress, user.defaultSlippage, chosenToken.percent, user.maxFeePerGas, user.maxPriorityFeePerGas, user.gasLimit, user.sellDelta, walletSecret)
         if (txRes.resp == 'error') {
-            await submitConfirmation.editReply({ content: `Error: ${txRes.reason}`, embeds: [] });
+            await interaction.editReply({ content: `Error: ${txRes.reason}`});
             return;
         }
 

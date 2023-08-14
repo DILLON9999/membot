@@ -172,8 +172,7 @@ const sell = async (token, userWallet, slipPercent, sellAmount, maxFeePerGas, ma
                 value: BigNumber.from(route.methodParameters.value),
                 from: userWallet,
                 gasPrice: route.gasPriceWei,
-                gasLimit: BigNumber.from('400000')
-                // gasLimit: ethers.utils.hexlify(parseInt(gasLimit)), // in WEI
+                gasLimit: BigNumber.from(gasLimit)
                 // maxFeePerGas: parseInt(maxFeePerGas) * 1e9, // gwei to wei
                 // maxPriorityFeePerGas: parseInt(maxPriorityFeePerGas) * 1e9 // gwei to wei
             };
