@@ -166,7 +166,7 @@ const sell = async (token, sellAmount, user, walletSecret) => {
 
             // Return if gas is greater than set limit
             if (user.maxGas) {
-                if ((BigInt(user.maxGas) * BigInt(1000000000)) > BigInt(route.gasPriceWei)) {
+                if ((BigInt(user.maxGas) * BigInt(1000000000)) < BigInt(route.gasPriceWei)) {
                     return { resp: "error", reason: "Transaction gas beyond your set limit" }
                 }
             }
