@@ -1,25 +1,9 @@
-async function test() {
-    const promise = new Promise((resolve, reject) => {
-        setTimeout(() => {
-            resolve('Promise resolved after 5 seconds');
-        }, 5000);
-    });
-
-    return {"promise": promise}
+const testObj = {
+    name: "dillon"
 }
 
-async function main() {
-
-    console.log("test1")
-
-    const resp = await test()
-
-    console.log("test2")
-
-    await resp.promise
-
-    console.log("test3")
-
+if (testObj.price && testObj.price < 12) {
+    console.log('less')
+} else {
+    console.log('more')
 }
-
-main()

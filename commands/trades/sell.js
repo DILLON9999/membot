@@ -72,6 +72,14 @@ const sell = async (token, sellAmount, user, walletSecret) => {
             await approvalTransaction.wait();
         }
 
+        // Return if maxGas fails
+        if (user.maxGas) {
+            const gasPrice = await ethersProvider.getGasPrice();
+            if (parseFloat(user.maxGas) < parseFloat(ethers.utils.formatUnits(gasPrice, 'gwei'))) {
+                return { resp: "error", reason: "Current gas prices are greater than your max" }
+            }
+        }
+
         //Return a copy of transactionRequest, The default implementation calls checkTransaction and resolves to if it is an ENS name, adds gasPrice, nonce, gasLimit and chainId based on the related operations on Signer.
         const rawTxn = await UNISWAP_ROUTER_CONTRACT.populateTransaction.swapExactTokensForETHSupportingFeeOnTransferTokens(
             valueHex, amountOutMinHex, path, to, deadline, {
