@@ -461,11 +461,15 @@ const getWallet = async (interaction) => {
         .setCustomId('withdraw')
         .setLabel('Withdraw')
         .setStyle(ButtonStyle.Secondary);
+    const linkButton = new ButtonBuilder()
+        .setLabel('Etherscan')
+        .setURL(`https://etherscan.io/address/${user.walletAddress}`)
+        .setStyle(ButtonStyle.Link);
 
     const row = new ActionRowBuilder()
-        .addComponents(withdrawButton);
+        .addComponents(withdrawButton, linkButton);
 
-    const resp = await interaction.reply({ embeds: walletEmbed, components: [row] })
+    const resp = await interaction.reply({ content: user.walletAddress, embeds: walletEmbed, components: [row] })
 
     const collectorFilter = i => i.user.id === interaction.user.id;
 
