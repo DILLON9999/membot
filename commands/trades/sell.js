@@ -1,200 +1,92 @@
-const { ethers, BigNumber } = require('ethers');
-const {
-    PERMIT2_ADDRESS,
-    SignatureTransfer,
-    AllowanceTransfer,
-    AllowanceProvider
-} = require('@uniswap/permit2-sdk');
-const { AlphaRouter, SwapType, SWAP_ROUTER_02_ADDRESSES, nativeOnChain } = require('@uniswap/smart-order-router');
-const { CurrencyAmount, TradeType, Percent, Token, ChainId } = require('@uniswap/sdk-core');
-const { UNIVERSAL_ROUTER_ADDRESS } = require('@uniswap/universal-router-sdk')
+const { ethers, BigNumber } = require("ethers")
+const { Token, Fetcher, Route, Trade, TokenAmount, TradeType, Percent } = require("@uniswap/sdk");
+const UNISWAP_ROUTER_ABI = require('./v2RouterAbi.json')
 const erc20Abi = require('./abi.json')
-const wethAbi = require('./wethAbi.json')
 
 const sell = async (token, sellAmount, user, walletSecret) => {
+
     try {
 
-        const chainId = 1
-
-        const uniswapRouterAddress = UNIVERSAL_ROUTER_ADDRESS(chainId)
-
-        // SELL TO WETH
+        // FROM ETH
         const WETH = new Token(
-            chainId,
-            '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+            1,
+            '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
             18,
             'WETH',
             'Wrapped Ether'
         );
 
-        // REPLACE WITH SELL TOKEN //
+        // TO TOKEN
         const sellToken = new Token(
-            chainId,
+            1,
             token.address,
             token.decimals, // update (18)
             token.symbol, // update (UNI)
             token.name // update (Uniswap)
         );
 
+        // ROUTER INFO
         const ethersProvider = new ethers.providers.JsonRpcProvider(`https://mainnet.infura.io/v3/d25074e260984463be075e88db795106`);
+        const UNISWAP_ROUTER_ADDRESS = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"
+        const UNISWAP_ROUTER_CONTRACT = new ethers.Contract(UNISWAP_ROUTER_ADDRESS, UNISWAP_ROUTER_ABI, ethersProvider)
         const ethersSigner = new ethers.Wallet(walletSecret, ethersProvider);
 
-        // pull amount of token user is currently holding
-        let ethRecieved;
+        // Determine percent of total to sell
+        const percentContract = await new ethers.Contract(sellToken.address, erc20Abi, ethersProvider)
+        const tokensHeld = ethers.utils.formatUnits(await percentContract.balanceOf(ethersSigner.address), sellToken.decimals)
+        const amount = tokensHeld * sellAmount
 
-        async function approvePermit2Contract(erc20Address, amount) {
-            const erc20 = new ethers.Contract(erc20Address, erc20Abi, ethersSigner);
-            const approveTx = await erc20.approve(PERMIT2_ADDRESS, amount);
-            console.log('approve tx hash:', approveTx.hash);
-            await approveTx.wait();
+        const pair = await Fetcher.fetchPairData(WETH, sellToken, ethersProvider); //creating instances of a pair
+        const route = await new Route([pair], sellToken); // a fully specified path from input token to output token
+        let amountIn = ethers.utils.parseUnits(amount.toString(), token.decimals); //helper function to convert ETH to Wei
+        amountIn = amountIn.toString()
+
+        const slippageTolerance = new Percent(user.defaultSlippage, "100"); // 50 bips, or 0.50% - Slippage tolerance
+
+        const trade = new Trade( //information necessary to create a swap transaction.
+            route,
+            new TokenAmount(sellToken, amountIn),
+            TradeType.EXACT_INPUT
+        );
+
+        // Calculate estimated output ETH
+        const amountOutEthRaw = trade.minimumAmountOut(new Percent("0", "100")).raw
+        const amountOutEth = Number(ethers.utils.formatUnits(amountOutEthRaw.toString(), 18)).toFixed(5)
+
+        const amountOutMin = trade.minimumAmountOut(slippageTolerance).raw; // needs to be converted to e.g. hex
+        const amountOutMinHex = ethers.BigNumber.from(amountOutMin.toString()).toHexString();
+        const path = [sellToken.address, WETH.address]; //An array of token addresses
+        const to = ethersSigner.address; // should be a checksummed recipient address
+        const deadline = Math.floor(Date.now() / 1000) + 60 * 20; // 20 minutes from the current Unix time
+        const value = trade.inputAmount.raw; // // needs to be converted to e.g. hex
+        const valueHex = await ethers.BigNumber.from(value.toString()).toHexString(); //convert to hex string
+
+        // Pull approved amount on router
+        const tokenContract = new ethers.Contract(sellToken.address, erc20Abi, ethersSigner);
+        const allowance = await tokenContract.allowance(ethersSigner.address, UNISWAP_ROUTER_ADDRESS);
+
+        // Approve max amount if approval too low
+        if (allowance._hex <= 0 || allowance._hex < valueHex) {
+            console.log('Approving Token')
+            let approvalTransaction = await tokenContract.approve(UNISWAP_ROUTER_ADDRESS, ethers.constants.MaxUint256);
+            await approvalTransaction.wait();
         }
 
-        async function getAllowanceAmount(erc20TokenAddress, spender) {
-            const erc20 = new ethers.Contract(erc20TokenAddress, erc20Abi, ethersSigner);
-            const allowance = await erc20.allowance(user.walletAddress, spender);
-            return allowance
+        //Return a copy of transactionRequest, The default implementation calls checkTransaction and resolves to if it is an ENS name, adds gasPrice, nonce, gasLimit and chainId based on the related operations on Signer.
+        const rawTxn = await UNISWAP_ROUTER_CONTRACT.populateTransaction.swapExactTokensForETHSupportingFeeOnTransferTokens(
+            valueHex, amountOutMinHex, path, to, deadline, {
+            gasLimit: BigNumber.from(user.gasLimit)
+        })
+
+        // Returns a Promise which resolves to the transaction.
+        let sendTxn = await ethersSigner.sendTransaction(rawTxn)
+        return {
+            resp: "success",
+            hash: sendTxn.hash,
+            spent: amount,
+            recieved: amountOutEth,
+            promise: sendTxn
         }
-
-        async function getSwapRoute(sourceToken, destToken, amount, permit, signature) {
-            const wei = ethers.utils.parseUnits(amount.toString(), sourceToken.decimals);
-            const inputAmount = CurrencyAmount.fromRawAmount(sourceToken, wei.toString());
-
-            const router = new AlphaRouter({ chainId, provider: ethersProvider });
-            const route = await router.route(
-                inputAmount,
-                // destToken,
-                nativeOnChain(1), // Destination -> ETH
-                TradeType.EXACT_INPUT,
-                {
-                    recipient: user.walletAddress,
-                    slippageTolerance: new Percent(parseInt(user.defaultSlippage), 100),
-                    type: SwapType.UNIVERSAL_ROUTER,
-                    deadlineOrPreviousBlockhash: Math.floor(Date.now() / 1000 + 1800),
-                    inputTokenPermit: {
-                        ...permit,
-                        signature
-                    }
-                }
-            );
-            ethRecieved = route.quote.toFixed(4)
-            return route;
-        }
-
-        async function executeSwap() {
-            const sourceToken = sellToken;
-            const destToken = WETH;
-
-            // Determine percent of total to sell
-            const tokenContract = await new ethers.Contract(token.address, erc20Abi, ethersProvider)
-            const tokensHeld = ethers.utils.formatUnits(await tokenContract.balanceOf(user.walletAddress), token.decimals)
-            const amount = tokensHeld * sellAmount
-
-            // Convert percentage sale to WEI
-            const amountInWei = ethers.utils.parseUnits(
-                amount.toString(),
-                sourceToken.decimals
-            );
-
-            // expiry for permit & tx confirmation, 30 mins
-            const expiry = Math.floor(Date.now() / 1000 + 1800);
-
-            // check token spending allowance
-            const allowance = await getAllowanceAmount(
-                sourceToken.address,
-                PERMIT2_ADDRESS
-            );
-
-            // if allowance too low, up it
-            if (BigInt(allowance._hex) == 0 || BigInt(allowance._hex) < BigInt(amountInWei._hex)) {
-                console.log('Allowance Limited, Increasing...')
-                await approvePermit2Contract(
-                    sourceToken.address,
-                    ethers.constants.MaxUint256 // APPROVE MAX AMOUNT
-                );
-            }
-
-            const allowanceProvider = new AllowanceProvider(
-                ethersProvider,
-                PERMIT2_ADDRESS
-            );
-
-            const nonce = await allowanceProvider.getNonce(
-                sourceToken.address,
-                user.walletAddress,
-                uniswapRouterAddress
-            );
-
-            // create permit with AllowanceTransfer
-            const permit = {
-                details: {
-                    token: sourceToken.address,
-                    amount: amountInWei,
-                    expiration: expiry,
-                    nonce
-                },
-                spender: uniswapRouterAddress,
-                sigDeadline: expiry
-            };
-            const { domain, types, values } = AllowanceTransfer.getPermitData(
-                permit,
-                PERMIT2_ADDRESS,
-                chainId
-            );
-
-            // create signature for permit
-            const signature = await ethersSigner._signTypedData(domain, types, values);
-
-            // NOTE: optionally verify the signature
-            const address = await ethers.utils.verifyTypedData(
-                domain,
-                types,
-                values,
-                signature
-            );
-
-            if (address !== user.walletAddress)
-                throw new error('signature verification failed');
-
-            // get swap route for tokens
-            const route = await getSwapRoute(
-                sourceToken,
-                destToken,
-                amount,
-                permit,
-                signature
-            );
-
-            // Return if gas is greater than set limit
-            if (user.maxGas) {
-                if ((BigInt(user.maxGas) * BigInt(1000000000)) < BigInt(route.gasPriceWei)) {
-                    return { resp: "error", reason: "Transaction gas beyond your set limit" }
-                }
-            }
-
-            // create transaction arguments for swap
-            const txArguments = {
-                data: route.methodParameters.calldata,
-                to: uniswapRouterAddress,
-                value: BigNumber.from(route.methodParameters.value),
-                from: user.walletAddress,
-                gasPrice: route.gasPriceWei,
-                gasLimit: BigNumber.from(user.gasLimit)
-            };
-
-            // send out swap transaction
-            const transaction = await ethersSigner.sendTransaction(txArguments);
-            await transaction.wait()
-
-            return {
-                hash: transaction.hash,
-                spent: amount,
-                recieved: ethRecieved
-            }
-
-        }
-
-        const hash = await executeSwap();
-        return hash
 
     } catch (e) {
         if (e.reason) {
@@ -204,7 +96,6 @@ const sell = async (token, sellAmount, user, walletSecret) => {
             return { resp: "error", reason: "Error placing transaction" }
         }
     }
-
 }
 
 module.exports = { sell }

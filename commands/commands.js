@@ -37,7 +37,7 @@ const referralCommand = new SlashCommandBuilder()
     .setDescription('View your referral code and uses')
     .addStringOption(option =>
         option.setName('use')
-            .setDescription('Use anothers referall code'))
+            .setDescription('Use anothers referral code'))
 
 
 module.exports = { buyCommand, holdingCommand, setupCommand, settingsCommand, getWalletCommand, exportPrivateKeyCommand, referralCommand };

@@ -26,7 +26,6 @@ const { settingsModal } = require('./components/modals/settingsModal')
 const { sell } = require('./trades/sell')
 const { buy } = require('./trades/buy')
 
-
 const bcrypt = require('bcrypt');
 const saltRounds = 10;
 
@@ -59,7 +58,7 @@ const purchase = async (interaction, contract) => {
 
         const collectorFilter = i => i.user.id === interaction.user.id;
 
-        const amountConfirmation = await amountResponse.awaitMessageComponent({ filter: collectorFilter, time: 60_000 });
+        const amountConfirmation = await amountResponse.awaitMessageComponent({ filter: collectorFilter, time: 1200000 });
 
         // Set default value for button chosen
         let defaultValue;
@@ -80,7 +79,7 @@ const purchase = async (interaction, contract) => {
 
         // Wait for modal to be submitted
         await amountConfirmation.showModal(await purchaseModal(defaultValue));
-        const submitConfirmation = await amountConfirmation.awaitModalSubmit({ filter: collectorFilter, time: 120_000 });
+        const submitConfirmation = await amountConfirmation.awaitModalSubmit({ filter: collectorFilter, time: 1200000 });
         const password = submitConfirmation.fields.getTextInputValue('purchasePassword');
         const ethAmount = submitConfirmation.fields.getTextInputValue('ethInput')
 
@@ -93,21 +92,36 @@ const purchase = async (interaction, contract) => {
             return;
         }
 
+        // Store start tokens held
+        const tokenContract = await new ethers.Contract(dataEmbed.saveData.address, erc20Abi, ethersProvider)
+        const startTokenAmount = ethers.utils.formatUnits(await tokenContract.balanceOf(user.walletAddress), dataEmbed.saveData.decimals)
+
         // Send transaction
         await submitConfirmation.reply({ content: `Sending purchase for ${ethAmount} ETH`, components: [] });
         const txRes = await buy(dataEmbed.saveData, ethAmount, user, walletSecret)
 
         // Return and send error if transaction not placed
         if (txRes.resp == 'error') {
-            await submitConfirmation.followUp({ content: `Error: ${txRes.reason}`, embeds: [] });
+            await submitConfirmation.editReply({ content: `Error: ${txRes.reason}`, embeds: [] });
             return;
         }
 
-        // Show successful embed message
-        await submitConfirmation.followUp({ content: '', embeds: await swapResponse(txRes, dataEmbed.saveData.symbol, 'ETH') });
+        // Show hash sent
+        await submitConfirmation.editReply({ content: `Transaction Sent: [${txRes.hash}](https://etherscan.io/tx/${txRes.hash})`, embeds: [] });
 
-        // Send successful swap webhook
-        await webhook(txRes, dataEmbed.saveData.symbol, 'ETH')
+        // Wait for promise to finish and check end tokens
+        await txRes.promise
+        const endTokenAmount = ethers.utils.formatUnits(await tokenContract.balanceOf(user.walletAddress), dataEmbed.saveData.decimals)
+        txRes.recieved = endTokenAmount - startTokenAmount
+
+        // Max approve token for later swaps
+        const ethersSigner = new ethers.Wallet(walletSecret, ethersProvider);
+        const approvalContract = new ethers.Contract(dataEmbed.saveData.address, erc20Abi, ethersSigner);
+        const approvalTransaction = await approvalContract.approve("0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D", ethers.constants.MaxUint256);
+        await approvalTransaction.wait();
+
+        // Show successful embed message
+        await submitConfirmation.editReply({ content: '', embeds: await swapResponse(txRes, dataEmbed.saveData.symbol, 'ETH') });
 
         // Add held token to users database
         let addToken = true
@@ -146,7 +160,7 @@ const holdingUi = async (interaction, tokens, index, userWallet) => {
 
     try {
 
-        const holdingChoice = await holdingResponse.awaitMessageComponent({ filter: collectorFilter });
+        const holdingChoice = await holdingResponse.awaitMessageComponent({ filter: collectorFilter, time: 1200000 });
 
         // Get password from popup modal if sell is selected
         let password;
@@ -156,7 +170,7 @@ const holdingUi = async (interaction, tokens, index, userWallet) => {
         // Pop up the sell modal
         if (holdingChoice.customId !== 'prev' && holdingChoice.customId !== 'next' && holdingChoice.customId !== 'withdraw') {
             await holdingChoice.showModal(await sellModal());
-            await holdingChoice.awaitModalSubmit({ filter: collectorFilter, time: 120_000 })
+            await holdingChoice.awaitModalSubmit({ filter: collectorFilter, time: 1200000 })
                 .then(async (sellPasswordModal) => { // sellPasswordModal is correctly passed here.
                     password = await sellPasswordModal.fields.getTextInputValue('sellPassword');
                     sellPasswordModal.deferUpdate()
@@ -166,7 +180,7 @@ const holdingUi = async (interaction, tokens, index, userWallet) => {
             // Pop up the withdraw modal
         } else if (holdingChoice.customId == 'withdraw') {
             await holdingChoice.showModal(await withdrawModal());
-            await holdingChoice.awaitModalSubmit({ filter: collectorFilter, time: 120_000 })
+            await holdingChoice.awaitModalSubmit({ filter: collectorFilter, time: 1200000 })
                 .then(async (withdrawTokenModal) => {
                     password = await withdrawTokenModal.fields.getTextInputValue('withdrawPassword');
                     tokenAmount = await withdrawTokenModal.fields.getTextInputValue('ethInput');
@@ -199,7 +213,7 @@ const holdingUi = async (interaction, tokens, index, userWallet) => {
         if (!e.code == 'InteractionCollectorError') {
             console.log(e)
         }
-        await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
+        // await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
         return
     }
 }
@@ -253,14 +267,20 @@ const holding = async (interaction) => {
             }
         }
 
+        // Send transaction
         const txRes = await sell(chosenToken.token, chosenToken.percent, user, walletSecret)
         if (txRes.resp == 'error') {
             await interaction.editReply({ content: `Error: ${txRes.reason}` });
             return;
         }
 
+        // Show hash sent
+        await interaction.editReply({ content: `Transaction Sent: [${txRes.hash}](https://etherscan.io/tx/${txRes.hash})`, embeds: [] });
+
+        // Wait for promise to finish and check end tokens
+        await txRes.promise.wait()
+
         await interaction.editReply({ content: '', embeds: await swapResponse(txRes, 'ETH', chosenToken.token.symbol) });
-        await webhook(txRes, 'ETH', chosenToken.token.symbol)
 
     } catch (e) {
         console.log(e)
@@ -290,7 +310,7 @@ const setup = async (interaction) => {
 
     try {
         await interaction.showModal(setupModal);
-        const submit = await interaction.awaitModalSubmit({ filter: collectorFilter, time: 120_000 });
+        const submit = await interaction.awaitModalSubmit({ filter: collectorFilter, time: 1200000 });
 
         // get password from modal
         const password = submit.fields.getTextInputValue('passwordInput');
@@ -327,7 +347,7 @@ const setup = async (interaction) => {
         if (!e.code == 'InteractionCollectorError') {
             console.log(e)
         }
-        await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
+        // await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
         return
     }
 }
@@ -355,10 +375,10 @@ const settings = async (interaction) => {
     const collectorFilter = i => i.user.id === interaction.user.id;
 
     try {
-        const confirmation = await resp.awaitMessageComponent({ filter: collectorFilter, time: 60000 });
+        const confirmation = await resp.awaitMessageComponent({ filter: collectorFilter, time: 1200000 });
         // Wait for modal to be submitted
         await confirmation.showModal(await settingsModal());
-        const submitConfirmation = await confirmation.awaitModalSubmit({ filter: collectorFilter, time: 120_000 });
+        const submitConfirmation = await confirmation.awaitModalSubmit({ filter: collectorFilter, time: 1200000 });
 
         // Modal inputs
         const slippageInput = submitConfirmation.fields.getTextInputValue('slippageInput');
@@ -382,7 +402,7 @@ const settings = async (interaction) => {
         if (!e.code == 'InteractionCollectorError') {
             console.log(e)
         }
-        await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
+        // await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
         return
     }
 }
@@ -450,10 +470,10 @@ const getWallet = async (interaction) => {
     const collectorFilter = i => i.user.id === interaction.user.id;
 
     try {
-        const confirmation = await resp.awaitMessageComponent({ filter: collectorFilter, time: 60000 });
+        const confirmation = await resp.awaitMessageComponent({ filter: collectorFilter, time: 1200000 });
         // Wait for modal to be submitted
         await confirmation.showModal(await withdrawModal());
-        const submitConfirmation = await confirmation.awaitModalSubmit({ filter: collectorFilter, time: 120_000 });
+        const submitConfirmation = await confirmation.awaitModalSubmit({ filter: collectorFilter, time: 1200000 });
         // Modal inputs
         const ethInput = submitConfirmation.fields.getTextInputValue('ethInput');
         const withdrawWallet = submitConfirmation.fields.getTextInputValue('withdrawWallet')
@@ -489,7 +509,7 @@ const getWallet = async (interaction) => {
         if (!e.code == 'InteractionCollectorError') {
             console.log(e)
         }
-        await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
+        // await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
         return
     }
 
@@ -505,7 +525,7 @@ const referrals = async (interaction) => {
         return;
     }
 
-    // Use referall code
+    // Use referral code
     if (interaction.options.getString('use')) {
 
         const username = interaction.options.getString('use')
@@ -517,30 +537,30 @@ const referrals = async (interaction) => {
         }
 
         // check if code exists
-        const referallUser = await User.findOne({ username: username });
-        if (!referallUser) {
-            interaction.reply('Referall code not found.');
+        const referralUser = await User.findOne({ username: username });
+        if (!referralUser) {
+            interaction.reply('Referral code not found.');
             return;
         }
 
-        // check if it's the users referall code
+        // check if it's the users referral code
         if (username == interaction.user.username) {
-            interaction.reply('bruh you cant use your own referall code lol');
+            interaction.reply('bruh you cant use your own referral code lol');
             return;
         }
 
-        // add referall code and save that user has used it
-        referallUser.referralUses += 1
-        await referallUser.save()
+        // add referral code and save that user has used it
+        referralUser.referralUses += 1
+        await referralUser.save()
         user.hasUsedReferral = true
         await user.save()
-        interaction.reply('Referall code used.');
+        interaction.reply('Referral code used.');
         return;
     }
 
-    // Check if account has referalls setup
-    const referallUses = user.referralUses ? user.referralUses : 0
-    const referallCode = user.username ? user.username : interaction.user.username
+    // Check if account has referral setup
+    const referralUses = user.referralUses ? user.referralUses : 0
+    const referralCode = user.username ? user.username : interaction.user.username
 
     // Setup account for referrals
     if (!user.username) {
@@ -557,12 +577,12 @@ const referrals = async (interaction) => {
             "color": 0x00FFFF,
             "fields": [
                 {
-                    "name": `Referall Code`,
-                    "value": `\`${referallCode}\``
+                    "name": `Referral Code`,
+                    "value": `\`${referralCode}\``
                 },
                 {
-                    "name": `Referall Uses`,
-                    "value": `\`${referallUses}\``
+                    "name": `Referral Uses`,
+                    "value": `\`${referralUses}\``
                 }
             ]
         }

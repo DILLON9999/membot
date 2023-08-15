@@ -1,6 +1,25 @@
-let string = "1000000000000000000000000000.0";
-const decimals = 18
-let newString = string.slice(0, -(decimals+2));
+async function test() {
+    const promise = new Promise((resolve, reject) => {
+        setTimeout(() => {
+            resolve('Promise resolved after 5 seconds');
+        }, 5000);
+    });
 
-console.log(newString); // Logs: "This is a very long string"
-console.log('1000000000     000000000000000000.0')
+    return {"promise": promise}
+}
+
+async function main() {
+
+    console.log("test1")
+
+    const resp = await test()
+
+    console.log("test2")
+
+    await resp.promise
+
+    console.log("test3")
+
+}
+
+main()

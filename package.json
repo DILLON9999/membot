@@ -11,10 +11,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@uniswap/permit2-sdk": "1.2.0",
-    "@uniswap/sdk-core": "3.2.6",
-    "@uniswap/smart-order-router": "3.12.6",
-    "@uniswap/universal-router-sdk": "1.5.2",
+    "@uniswap/sdk": "^3.0.3",
     "axios": "1.4.0",
     "bcrypt": "5.1.0",
     "discord.js": "14.12.1",
