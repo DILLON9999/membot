@@ -384,7 +384,7 @@ const settings = async (interaction) => {
         return;
     }
 
-    if (interaction.options.getBoolean('mev_protection') != undefined) {
+    if (interaction.options.getBoolean('mev_protection') != null) {
         user.mevProtectionOn = interaction.options.getBoolean('mev_protection')
         await user.save()
         await interaction.reply(`Mev settings updated to: \`${interaction.options.getBoolean('mev_protection')}\``);
@@ -413,14 +413,14 @@ const settings = async (interaction) => {
         const slippageInput = submitConfirmation.fields.getTextInputValue('slippageInput');
         const maxGasInput = submitConfirmation.fields.getTextInputValue('maxGasInput');
         const gasLimitInput = submitConfirmation.fields.getTextInputValue('gasLimitInput');
-        const buyDeltaInput = submitConfirmation.fields.getTextInputValue('buyDeltaInput');
-        const sellDeltaInput = submitConfirmation.fields.getTextInputValue('sellDeltaInput');
+        // const buyDeltaInput = submitConfirmation.fields.getTextInputValue('buyDeltaInput');
+        // const sellDeltaInput = submitConfirmation.fields.getTextInputValue('sellDeltaInput');
 
         if (slippageInput) { user.defaultSlippage = slippageInput }
         if (maxGasInput) { user.maxGas = maxGasInput }
         if (gasLimitInput) { user.gasLimit = gasLimitInput }
-        if (buyDeltaInput) { user.buyDelta = buyDeltaInput }
-        if (sellDeltaInput) { user.sellDelta = sellDeltaInput }
+        // if (buyDeltaInput) { user.buyDelta = buyDeltaInput }
+        // if (sellDeltaInput) { user.sellDelta = sellDeltaInput }
 
         await user.save()
 
