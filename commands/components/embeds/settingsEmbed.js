@@ -20,13 +20,17 @@ const settingsEmbed = async (user) => {
                     "name": `Gas Limit`,
                     "value": `\`${user.gasLimit} WEI\``
                 },
+                // {
+                //     "name": `Buy Delta`,
+                //     "value": `\`${user.buyDelta} GWEI\``
+                // },
+                // {
+                //     "name": `Sell Delta`,
+                //     "value": `\`${user.sellDelta} GWEI\``
+                // },
                 {
-                    "name": `Buy Delta`,
-                    "value": `\`${user.buyDelta} GWEI\``
-                },
-                {
-                    "name": `Sell Delta`,
-                    "value": `\`${user.sellDelta} GWEI\``
+                    "name": `Mev Protection`,
+                    "value": `\`Enabled: ${user.mevProtectionOn ? user.mevProtectionOn : false}\``
                 }
             ]
         }

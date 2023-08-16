@@ -6,6 +6,7 @@ const { client } = require('../install')
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const erc20Abi = require('./trades/abi.json')
 const ethersProvider = new ethers.providers.JsonRpcProvider(`https://mainnet.infura.io/v3/d25074e260984463be075e88db795106`);
+const UNISWAP_ROUTER_ADDRESS = "0x81d69a8dc9364cfb8273b1b55f9d4715ec782fd9"
 
 // Helper functions
 const { tokenData } = require('./components/embeds/tokenData')
@@ -117,7 +118,7 @@ const purchase = async (interaction, contract) => {
         // Max approve token for later swaps
         const ethersSigner = new ethers.Wallet(walletSecret, ethersProvider);
         const approvalContract = new ethers.Contract(dataEmbed.saveData.address, erc20Abi, ethersSigner);
-        const approvalTransaction = await approvalContract.approve("0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D", ethers.constants.MaxUint256);
+        const approvalTransaction = await approvalContract.approve(UNISWAP_ROUTER_ADDRESS, ethers.constants.MaxUint256);
         await approvalTransaction.wait();
 
         // Show successful embed message
@@ -231,6 +232,27 @@ const holding = async (interaction) => {
         if (!user.tokens || user.tokens.length == 0) {
             await interaction.reply("You are not currently holding or tracking any tokens")
             return
+        }
+
+        // Add specified tokens to holding
+        if (interaction.options.getString('add')) {
+
+            const addTokenData = await tokenData(interaction.options.getString('add'))
+
+            let addToken = true
+            for (let i = 0; i < user.tokens.length; i++) {
+                if (user.tokens[i].address == addTokenData.saveData.address) { addToken = false }
+            }
+            if (addToken) {
+                user.tokens.push(addTokenData.saveData);
+                await user.save() 
+                await interaction.reply(`\`${addTokenData.saveData.symbol}\` has been added to your holdings list.`);
+                return
+            } else {
+                await interaction.reply('Token is already in your holdings list.')
+                return
+            }
+
         }
 
         // Set reply to edit later
@@ -358,8 +380,15 @@ const settings = async (interaction) => {
 
     let user = await User.findOne({ discordId: interaction.user.id });
     if (!user) {
-        interaction.reply('You haven\'t made a wallet yet. Use /setup to create one.');
+        await interaction.reply('You haven\'t made a wallet yet. Use /setup to create one.');
         return;
+    }
+
+    if (interaction.options.getBoolean('mev_protection') != undefined) {
+        user.mevProtectionOn = interaction.options.getBoolean('mev_protection')
+        await user.save()
+        await interaction.reply(`Mev settings updated to: \`${interaction.options.getBoolean('mev_protection')}\``);
+        return
     }
 
     const changeSettings = new ButtonBuilder()

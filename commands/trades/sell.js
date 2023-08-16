@@ -25,11 +25,20 @@ const sell = async (token, sellAmount, user, walletSecret) => {
             token.name // update (Uniswap)
         );
 
-        // ROUTER INFO
-        const ethersProvider = new ethers.providers.JsonRpcProvider(`https://mainnet.infura.io/v3/d25074e260984463be075e88db795106`);
-        const UNISWAP_ROUTER_ADDRESS = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"
-        const UNISWAP_ROUTER_CONTRACT = new ethers.Contract(UNISWAP_ROUTER_ADDRESS, UNISWAP_ROUTER_ABI, ethersProvider)
+        // Providers & Wallets
+        let RPC_URL;
+        if (user.mevProtectionOn) { // set mev protection rpc url
+            RPC_URL = "https://rpc.mevblocker.io/"
+        } else {
+            RPC_URL = "https://mainnet.infura.io/v3/d25074e260984463be075e88db795106"
+        }
+        const ethersProvider = new ethers.providers.JsonRpcProvider(RPC_URL);
         const ethersSigner = new ethers.Wallet(walletSecret, ethersProvider);
+
+        // Router Info
+        const UNISWAP_ROUTER_ADDRESS = "0x81d69a8dc9364cfb8273b1b55f9d4715ec782fd9"
+        const UNISWAP_ROUTER_CONTRACT = new ethers.Contract(UNISWAP_ROUTER_ADDRESS, UNISWAP_ROUTER_ABI, ethersProvider)
+
 
         // Determine percent of total to sell
         const percentContract = await new ethers.Contract(sellToken.address, erc20Abi, ethersProvider)

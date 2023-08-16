@@ -24,26 +24,26 @@ const settingsModal = async (defaultValue) => {
         .setStyle(TextInputStyle.Short)
         .setRequired(false)
 
-    const buyDeltaInput = new TextInputBuilder()
-        .setCustomId('buyDeltaInput')
-        .setLabel("Buy Delta (GWEI)")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
+    // const buyDeltaInput = new TextInputBuilder()
+    //     .setCustomId('buyDeltaInput')
+    //     .setLabel("Buy Delta (GWEI)")
+    //     .setStyle(TextInputStyle.Short)
+    //     .setRequired(false)
 
-    const sellDeltaInput = new TextInputBuilder()
-        .setCustomId('sellDeltaInput')
-        .setLabel("Sell Delta (GWEI)")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
+    // const sellDeltaInput = new TextInputBuilder()
+    //     .setCustomId('sellDeltaInput')
+    //     .setLabel("Sell Delta (GWEI)")
+    //     .setStyle(TextInputStyle.Short)
+    //     .setRequired(false)
 
     const firstActionRow = new ActionRowBuilder().addComponents(slippageInput);
     const secondActionRow = new ActionRowBuilder().addComponents(maxGasInput);
     const thirdActionRow = new ActionRowBuilder().addComponents(gasLimitInput);
-    const fourthActionRow = new ActionRowBuilder().addComponents(buyDeltaInput);
-    const fifthActionRow = new ActionRowBuilder().addComponents(sellDeltaInput);
+    // const fourthActionRow = new ActionRowBuilder().addComponents(buyDeltaInput);
+    // const fifthActionRow = new ActionRowBuilder().addComponents(sellDeltaInput);
 
     // Add inputs to the modal
-    await settingsModal.addComponents(firstActionRow, secondActionRow, thirdActionRow, fourthActionRow, fifthActionRow);
+    await settingsModal.addComponents(firstActionRow, secondActionRow, thirdActionRow);
 
     return settingsModal
 

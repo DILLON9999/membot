@@ -11,6 +11,9 @@ const buyCommand = new SlashCommandBuilder()
 const holdingCommand = new SlashCommandBuilder()
     .setName('holding')
     .setDescription('View tokens currently held in wallet')
+    .addStringOption(option =>
+        option.setName('add')
+            .setDescription('Add a token to your holdings list'))
 
 const setupCommand = new SlashCommandBuilder()
     .setName('setup')
@@ -19,6 +22,9 @@ const setupCommand = new SlashCommandBuilder()
 const settingsCommand = new SlashCommandBuilder()
     .setName('settings')
     .setDescription('Change your default transaction settings')
+    .addBooleanOption(option =>
+		option.setName('mev_protection')
+			.setDescription('Choose to enable or disable mev protection'));
 
 const getWalletCommand = new SlashCommandBuilder()
     .setName('wallet')

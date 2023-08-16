@@ -25,11 +25,19 @@ const buy = async (token, amount, user, walletSecret) => {
             token.name // update (Uniswap)
         );
 
-        // ROUTER INFO
-        const ethersProvider = new ethers.providers.JsonRpcProvider(`https://mainnet.infura.io/v3/d25074e260984463be075e88db795106`);
-        const UNISWAP_ROUTER_ADDRESS = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"
-        const UNISWAP_ROUTER_CONTRACT = new ethers.Contract(UNISWAP_ROUTER_ADDRESS, UNISWAP_ROUTER_ABI, ethersProvider)
+        // Providers & Wallets
+        let RPC_URL;
+        if (user.mevProtectionOn) { // set mev protection rpc url
+            RPC_URL = "https://rpc.mevblocker.io/"
+        } else {
+            RPC_URL = "https://mainnet.infura.io/v3/d25074e260984463be075e88db795106"
+        }
+        const ethersProvider = new ethers.providers.JsonRpcProvider(RPC_URL);
         const ethersSigner = new ethers.Wallet(walletSecret, ethersProvider);
+
+        // Router Info
+        const UNISWAP_ROUTER_ADDRESS = "0x81d69a8dc9364cfb8273b1b55f9d4715ec782fd9"
+        const UNISWAP_ROUTER_CONTRACT = new ethers.Contract(UNISWAP_ROUTER_ADDRESS, UNISWAP_ROUTER_ABI, ethersProvider)
 
         const pair = await Fetcher.fetchPairData(buyToken, WETH, ethersProvider); //creating instances of a pair
         const route = await new Route([pair], WETH); // a fully specified path from input token to output token
@@ -55,7 +63,7 @@ const buy = async (token, amount, user, walletSecret) => {
         // Return if maxGas fails
         if (user.maxGas) {
             const gasPrice = await ethersProvider.getGasPrice();
-            if ( parseFloat(user.maxGas) < parseFloat(ethers.utils.formatUnits(gasPrice, 'gwei')) ) {
+            if (parseFloat(user.maxGas) < parseFloat(ethers.utils.formatUnits(gasPrice, 'gwei'))) {
                 return { resp: "error", reason: "Current gas prices are greater than your max" }
             }
         }
@@ -64,7 +72,6 @@ const buy = async (token, amount, user, walletSecret) => {
         const rawTxn = await UNISWAP_ROUTER_CONTRACT.populateTransaction.swapExactETHForTokensSupportingFeeOnTransferTokens(amountOutMinHex, path, to, deadline, {
             value: valueHex,
             gasLimit: BigNumber.from(user.gasLimit)
-            // gasPrice: BigNumber.from('2000000000')
         })
 
         // Returns a Promise which resolves to the transaction.

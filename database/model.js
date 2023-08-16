@@ -16,7 +16,8 @@ const userSchema = new mongoose.Schema({
     sellDelta: { type: String },
     tokens: [{address: String, decimals: Number, symbol: String, name: String}],
     referralUses: { type: Number },
-    hasUsedReferral: { type: Boolean }
+    hasUsedReferral: { type: Boolean },
+    mevProtectionOn: { type: Boolean },
 });
 
 const User = mongoose.model("User", userSchema);

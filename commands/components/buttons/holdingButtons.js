@@ -45,6 +45,11 @@ const holdingButtons = async (tokensList, index) => {
         .setCustomId('withdraw')
         .setLabel('Withdraw')
         .setStyle(ButtonStyle.Secondary)
+    // const remove = new ButtonBuilder()
+    //     .setCustomId('remove')
+    //     .setLabel('Remove')
+    //     .setStyle(ButtonStyle.Danger)
+
 
 
     const topRow = new ActionRowBuilder()
