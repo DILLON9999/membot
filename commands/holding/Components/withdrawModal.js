@@ -1,6 +1,7 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 
-const withdrawModal = async (defaultValue) => {
+
+module.exports = async () => {
 
     const withdrawModal = new ModalBuilder()
         .setCustomId('withdrawModal')
@@ -28,5 +29,3 @@ const withdrawModal = async (defaultValue) => {
     return withdrawModal
 
 }
-
-module.exports = { withdrawModal }

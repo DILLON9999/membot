@@ -1,6 +1,6 @@
 const axios = require('axios')
 
-const tokenData = async (address) => {
+module.exports = async (address) => {
 
     let embed;
     let saveData = {
@@ -94,5 +94,3 @@ const tokenData = async (address) => {
     return { respCode, embed, saveData }
 
 }
-
-module.exports = { tokenData };

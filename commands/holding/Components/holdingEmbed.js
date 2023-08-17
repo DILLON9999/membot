@@ -1,7 +1,7 @@
 const axios = require('axios')
 
-const heldTokenData = async (address, amountHeld, walletBalance) => {
-
+module.exports = async (address, amountHeld, walletBalance) => {
+    
     let embed;
     let respCode;
 
@@ -89,5 +89,3 @@ const heldTokenData = async (address, amountHeld, walletBalance) => {
     return { respCode, embed }
 
 }
-
-module.exports = { heldTokenData };

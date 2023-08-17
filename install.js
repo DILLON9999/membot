@@ -1,6 +1,8 @@
-const { Client, Collection, Events, GatewayIntentBits, SlashCommandBuilder } = require('discord.js');
+const { Client, Collection, Events, GatewayIntentBits, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { buyCommand, holdingCommand, setupCommand, settingsCommand, exportPrivateKeyCommand, getWalletCommand, referralCommand } = require('./commands/commands');
-const { purchase, setup, holding, settings, exportPrivateKey, getWallet, referrals } = require('./commands/handlers');
+const { User } = require('./database/model');
+const buttonHandler = require('./commands/buttonHandler');
+const commandHandler = require('./commands/commandHandler');
 
 const client = new Client({
     intents: [
@@ -23,22 +25,13 @@ const installCommands = () => {
 
 const registerInteractions = () => {
     client.on(Events.InteractionCreate, async interaction => {
-        if (interaction.commandName == 'ping') {
-            pingInteraction(interaction);
-        } else if (interaction.commandName == 'buy') {
-            await purchase(interaction, interaction.options.getString('contract'));
-        } else if (interaction.commandName == 'setup') {
-            await setup(interaction)
-        } else if (interaction.commandName == 'holding') {
-            await holding(interaction);
-        } else if (interaction.commandName == 'exportkey') {
-            await exportPrivateKey(interaction)
-        } else if (interaction.commandName == 'settings') {
-            await settings(interaction)
-        } else if (interaction.commandName == 'wallet') {
-            await getWallet(interaction)
-        } else if (interaction.commandName == 'referrals') {
-            await referrals(interaction)
+
+        if (interaction.isButton()) {
+            buttonHandler(interaction)
+        } 
+
+        else if (interaction.isChatInputCommand()) {
+            commandHandler(interaction)
         }
 
     });

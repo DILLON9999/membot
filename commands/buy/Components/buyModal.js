@@ -1,6 +1,6 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 
-const purchaseModal = async (defaultValue) => {
+module.exports = async (defaultValue) => {
 
     const purchaseModal = new ModalBuilder()
         .setCustomId('purchaseModal')
@@ -26,5 +26,3 @@ const purchaseModal = async (defaultValue) => {
     return purchaseModal
 
 }
-
-module.exports = { purchaseModal }

@@ -3,7 +3,7 @@ const { Token, Fetcher, Route, Trade, TokenAmount, TradeType, Percent } = requir
 const UNISWAP_ROUTER_ABI = require('./v2RouterAbi.json')
 const erc20Abi = require('./abi.json')
 
-const sell = async (token, sellAmount, user, walletSecret) => {
+const swapSell = async (token, sellAmount, user, walletSecret) => {
 
     try {
 
@@ -115,4 +115,4 @@ const sell = async (token, sellAmount, user, walletSecret) => {
     }
 }
 
-module.exports = { sell }
+module.exports = { swapSell }

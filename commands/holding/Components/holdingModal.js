@@ -1,6 +1,6 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 
-const sellModal = async () => {
+module.exports = async () => {
 
     const sellModal = new ModalBuilder()
         .setCustomId('sellModal')
@@ -16,5 +16,3 @@ const sellModal = async () => {
     return sellModal
 
 }
-
-module.exports = { sellModal }

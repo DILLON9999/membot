@@ -1,4 +1,4 @@
-const settingsEmbed = async (user) => {
+module.exports = async (user) => {
 
     return [
         {
@@ -30,12 +30,9 @@ const settingsEmbed = async (user) => {
                 // },
                 {
                     "name": `Mev Protection`,
-                    "value": `\`Enabled: ${user.mevProtectionOn ? user.mevProtectionOn : false}\``
+                    "value": `\`Enabled: ${user.mevProtectionOn != null ? user.mevProtectionOn : false}\``
                 }
             ]
         }
     ]
-
 }
-
-module.exports = { settingsEmbed };

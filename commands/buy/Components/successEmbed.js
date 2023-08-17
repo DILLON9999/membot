@@ -1,4 +1,4 @@
-const swapResponse = async (txRes, inSymbol, outSymbol) => {
+module.exports = async (txRes, inSymbol, outSymbol) => {
 
     return [
         {
@@ -24,5 +24,3 @@ const swapResponse = async (txRes, inSymbol, outSymbol) => {
     ]
 
 }
-
-module.exports = { swapResponse };

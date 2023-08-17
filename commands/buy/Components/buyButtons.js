@@ -1,29 +1,29 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 
-const ethButtons = async () => {
+module.exports = async (interaction, contract) => {
 
     const pointOneEth = new ButtonBuilder()
-        .setCustomId('pointOneEth')
+        .setCustomId(`buy:pointOneEth:${interaction.user.id}:${contract}`)
         .setLabel('0.1 ETH')
         .setStyle(ButtonStyle.Success);
 
     const pointTwoFiveEth = new ButtonBuilder()
-        .setCustomId('pointTwoFiveEth')
+        .setCustomId(`buy:pointTwoFiveEth:${interaction.user.id}:${contract}`)
         .setLabel('0.25 ETH')
         .setStyle(ButtonStyle.Success);
 
     const pointFiveEth = new ButtonBuilder()
-        .setCustomId('pointFiveEth')
+        .setCustomId(`buy:pointFiveEth:${interaction.user.id}:${contract}`)
         .setLabel('0.5 ETH')
         .setStyle(ButtonStyle.Success);
 
     const oneEth = new ButtonBuilder()
-        .setCustomId('oneEth')
+        .setCustomId(`buy:oneEth:${interaction.user.id}:${contract}`)
         .setLabel('1 ETH')
         .setStyle(ButtonStyle.Success);
 
     const customEth = new ButtonBuilder()
-        .setCustomId('customEth')
+        .setCustomId(`buy:customEth:${interaction.user.id}:${contract}`)
         .setLabel('Custom Amount')
         .setStyle(ButtonStyle.Primary)
 
@@ -33,5 +33,3 @@ const ethButtons = async () => {
     return row
 
 }
-
-module.exports = { ethButtons }
