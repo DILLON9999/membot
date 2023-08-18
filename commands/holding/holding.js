@@ -14,6 +14,11 @@ module.exports = async (interaction, contract) => {
             return;
         }
 
+        if (!user.tokens || user.tokens.length == 0) {
+            await interaction.reply("You are not currently holding or tracking any tokens")
+            return
+        }
+
         // ADD - Optional
         if (interaction.options.getString('add')) {
 

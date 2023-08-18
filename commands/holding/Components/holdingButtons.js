@@ -12,6 +12,11 @@ module.exports = async (interaction, tokensList, index) => {
         .setLabel('Next')
         .setStyle(ButtonStyle.Success);
 
+    const remove = new ButtonBuilder()
+        .setCustomId(`scroll:remove:${interaction.user.id}`)
+        .setLabel('Remove')
+        .setStyle(ButtonStyle.Danger);
+
     // Disable previous button if looking at start of list
     if (index == 0) { prev.setDisabled(true) }
 
@@ -53,7 +58,7 @@ module.exports = async (interaction, tokensList, index) => {
 
 
     const topRow = new ActionRowBuilder()
-        .addComponents(prev, next);
+        .addComponents(prev, next, remove);
 
     const middleRow = new ActionRowBuilder()
         .addComponents(sellQuarter, sellHalf, sellThreeQuarters, sellFull)

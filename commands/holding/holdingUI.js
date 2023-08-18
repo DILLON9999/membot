@@ -1,12 +1,15 @@
 const { ethers } = require('ethers');
 const holdingEmbed = require('./Components/holdingEmbed');
 const holdingButtons = require('./Components/holdingButtons')
+const { User } = require('../../database/model');
 
 // Transaction data
 const erc20Abi = require('../trades/abi.json');
 const ethersProvider = new ethers.providers.JsonRpcProvider(`https://mainnet.infura.io/v3/d25074e260984463be075e88db795106`);
 
 const holdingUI = async (interaction, tokens, index, userWallet) => {
+
+    let user = await User.findOne({ discordId: interaction.user.id });
 
     // Get amount of token currently held
     const tokenContract = await new ethers.Contract(tokens[index].address, erc20Abi, ethersProvider)
@@ -35,6 +38,13 @@ const holdingUI = async (interaction, tokens, index, userWallet) => {
             case 'next':
                 holdingChoice.deferUpdate()
                 return await holdingUI(interaction, tokens, index + 1, userWallet)
+            case 'remove':
+                holdingChoice.deferUpdate()
+                user.tokens.splice(index, 1) // remove from db
+                await user.save()
+                if (user.tokens[index]) { return await holdingUI(interaction, user.tokens, index, userWallet) }
+                else if (user.tokens[index-1]) { return await holdingUI(interaction, user.tokens, index - 1, userWallet) }
+                else { interaction.editReply({content: `You are no longer tracking any tokens`, embeds: [], components: []}); return }
         }
     } catch (e) {
         if (!e.code == 'InteractionCollectorError') {
