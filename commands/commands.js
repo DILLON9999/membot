@@ -6,7 +6,8 @@ const buyCommand = new SlashCommandBuilder()
     .addStringOption(option =>
         option.setName('contract')
             .setDescription('Contract address')
-            .setRequired(true))
+            .setRequired(true)
+            .setAutocomplete(true));
 
 const holdingCommand = new SlashCommandBuilder()
     .setName('holding')

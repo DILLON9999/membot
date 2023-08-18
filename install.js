@@ -28,12 +28,43 @@ const registerInteractions = () => {
 
         if (interaction.isButton()) {
             buttonHandler(interaction)
-        } 
+        }
 
         else if (interaction.isChatInputCommand()) {
             commandHandler(interaction)
         }
 
+        // Handle buy options autocomplete
+        else if (interaction.isAutocomplete()) {
+
+            try {
+
+                let user = await User.findOne({ discordId: interaction.user.id });
+                if (!user) {
+                    return;
+                }        
+
+                // Get held tokens and make list of options
+                let tokens = user.tokens
+                let tokenOptions = []
+                if (tokens.length > 25) { return; }
+                for (let i = 0; i < tokens.length; i++) {
+                    tokenOptions.push(tokens[i].name)
+                }
+
+                const focusedValue = interaction.options.getFocused();
+                const filtered = tokenOptions.filter(choice => (choice.toLowerCase()).startsWith(focusedValue.toLowerCase()));
+
+                // Respond with token names and their address as the value
+                await interaction.respond(
+                    filtered.map(choice => ({ name: choice, value: (tokens.find(obj => obj.name === choice).address) })),
+                );
+
+            } catch (e) {
+                console.log(e)
+                return;
+            }
+        }
     });
 }
 
